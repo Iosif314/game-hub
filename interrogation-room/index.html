@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>취조실 감독관</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="hud">
+      <div id="hud-title">취조실 감독관</div>
+      <div id="hud-round"></div>
+    </div>
+
+    <div id="start-screen">
+      <div id="start-box">
+        <h1>취조실 감독관</h1>
+        <p>당신은 유리벽 너머에서 지켜보는 감독관입니다.<br />매 턴 압박·친근·논파 중 하나를 골라 심문관에게 지시하고, 용의자 AI의 진실을 밝혀내세요.</p>
+
+        <div id="difficulty-select">
+          <div class="difficulty-label">난이도</div>
+          <div id="difficulty-options">
+            <button class="difficulty-btn" data-difficulty="easy">쉬움</button>
+            <button class="difficulty-btn selected" data-difficulty="normal">보통</button>
+            <button class="difficulty-btn" data-difficulty="hard">어려움</button>
+          </div>
+        </div>
+
+        <button id="start-btn">새 사건 시작</button>
+        <button id="records-btn" class="secondary-btn">취조 기록</button>
+        <div id="start-error"></div>
+      </div>
+    </div>
+
+    <div id="intro-screen" class="hidden">
+      <div id="intro-number"></div>
+      <div id="intro-title"></div>
+    </div>
+
+    <div id="records-screen" class="hidden">
+      <div id="records-box">
+        <div id="records-list-view">
+          <h2>취조 기록</h2>
+          <div id="records-list"></div>
+          <button id="records-back-btn" class="secondary-btn">돌아가기</button>
+        </div>
+        <div id="record-detail-view" class="hidden">
+          <button id="record-detail-back-btn" class="secondary-btn">목록으로</button>
+          <h2 id="record-detail-title"></h2>
+          <div id="record-detail-meta"></div>
+          <div class="record-detail-section-title">사건 개요</div>
+          <div id="record-detail-brief"></div>
+          <div class="record-detail-section-title">대화 기록</div>
+          <div id="record-detail-transcript"></div>
+          <div class="record-detail-section-title">결과</div>
+          <div id="record-detail-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div id="left-column">
+        <div id="case-info-panel">
+          <div class="panel-title">사건 정보</div>
+          <div id="case-type-badge"></div>
+          <div id="case-title"></div>
+          <div id="case-brief"></div>
+        </div>
+
+        <div id="misc-panel">
+          <div class="panel-title">증거</div>
+          <div id="evidence-row"></div>
+        </div>
+      </div>
+
+      <div id="center-column">
+        <div id="room-panel">
+          <div class="panel-title">취조실</div>
+          <div id="room-scene">
+            <div class="table-surface"></div>
+            <div class="figure interrogator-figure">
+              <div id="interrogator-portrait" class="portrait portrait-back"></div>
+              <div class="figure-body interrogator-body"></div>
+              <div class="char-label">심문관 (뒷모습)</div>
+            </div>
+            <div class="figure suspect-figure">
+              <div id="suspect-portrait" class="portrait"></div>
+              <div class="figure-body suspect-body"></div>
+              <div class="char-label" id="suspect-name-label">용의자</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="detector-panel">
+          <div class="panel-title">거짓말탐지기</div>
+          <div class="stress-bar"><div id="stress-fill" class="stress-fill"></div></div>
+          <div id="stress-percent">0%</div>
+        </div>
+      </div>
+
+      <div id="right-column">
+        <div class="panel-title">대화 기록</div>
+        <div id="transcript">
+          <div id="verdict-row" class="hidden">
+            <div id="verdict-prompt">최종 판단을 내리세요.</div>
+            <button id="charge-btn">기소한다</button>
+            <button id="release-btn">방면한다</button>
+          </div>
+        </div>
+        <div id="controls">
+          <button class="tactic-btn" id="tactic-pressure" data-style="pressure">압박<br /><small>몰아붙이기</small></button>
+          <button class="tactic-btn" id="tactic-empathy" data-style="empathy">친근<br /><small>신뢰 쌓기</small></button>
+          <button class="tactic-btn" id="tactic-analytic" data-style="analytic">논파<br /><small>모순 반박</small></button>
+        </div>
+      </div>
+    </div>
+
+    <div id="reveal-screen" class="hidden">
+      <div id="reveal-box">
+        <h2 id="reveal-title"></h2>
+        <p id="reveal-message"></p>
+        <p id="reveal-truth"></p>
+        <button id="restart-btn">새 사건 시작</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

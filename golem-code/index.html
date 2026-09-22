@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>골렘 코드</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="hud">
+      <div id="hud-title">골렘 코드</div>
+      <div id="hud-stage"></div>
+    </div>
+
+    <div id="start-screen">
+      <div id="start-box">
+        <h1>골렘 코드</h1>
+        <p>당신은 골렘을 만드는 마법사입니다.<br />골렘에게 명령서(코드)를 새겨 던전으로 보내고, 스스로 판단해 돌파하도록 만드세요.</p>
+        <button id="start-btn">첫 던전 생성</button>
+        <div id="start-error"></div>
+      </div>
+    </div>
+
+    <div id="intro-screen" class="hidden">
+      <div id="intro-number"></div>
+      <div id="intro-title"></div>
+    </div>
+
+    <div id="game-screen" class="hidden">
+      <div id="left-column">
+        <div id="dungeon-info-panel">
+          <div class="panel-title">던전 정보</div>
+          <div id="dungeon-name"></div>
+          <div id="dungeon-narrative"></div>
+          <div id="gimmick-box">
+            <div id="gimmick-title"></div>
+            <div id="gimmick-desc"></div>
+          </div>
+        </div>
+        <div id="bestiary-panel">
+          <div class="panel-title">몬스터</div>
+          <div id="bestiary-row"></div>
+        </div>
+      </div>
+
+      <div id="center-column">
+        <div id="grid-panel">
+          <div id="golem-status">
+            <div class="status-bar"><div id="hp-fill" class="status-fill hp"></div></div>
+            <div id="hp-text"></div>
+            <div class="status-bar"><div id="mana-fill" class="status-fill mana"></div></div>
+            <div id="mana-text"></div>
+          </div>
+          <div id="dungeon-grid"></div>
+        </div>
+        <div id="run-controls">
+          <button id="run-btn">탐사 시작</button>
+          <button id="pause-btn" disabled>일시정지</button>
+          <button id="step-btn" disabled>1스텝</button>
+          <select id="speed-select">
+            <option value="700">느림</option>
+            <option value="350" selected>보통</option>
+            <option value="120">빠름</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="right-column">
+        <div class="panel-title">골렘 명령서</div>
+        <textarea id="code-editor" spellcheck="false"></textarea>
+        <div class="panel-title" id="log-title">실행 로그</div>
+        <div id="run-log"></div>
+      </div>
+    </div>
+
+    <div id="reveal-screen" class="hidden">
+      <div id="reveal-box">
+        <h2 id="reveal-title"></h2>
+        <p id="reveal-message"></p>
+        <button id="next-btn"></button>
+        <button id="retry-btn"></button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
