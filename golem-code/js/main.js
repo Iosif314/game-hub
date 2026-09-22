@@ -147,7 +147,7 @@ async function playIntro(title) {
   introScreen.classList.add("hidden");
 }
 
-const API_BASE = "https://golem-code.onrender.com";
+const API_BASE = "https://interrogation-room-rqxc.onrender.com/golem-code";
 
 async function api(path, body) {
   const res = await fetch(API_BASE + path, {

@@ -194,7 +194,7 @@ async function playIntro(caseTitleText) {
   introScreen.classList.add("hidden");
 }
 
-const API_BASE = "https://interrogation-room-rqxc.onrender.com";
+const API_BASE = "https://interrogation-room-rqxc.onrender.com/interrogation-room";
 
 async function api(path, body) {
   const res = await fetch(API_BASE + path, {
