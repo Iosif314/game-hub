@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>아레나 듀얼</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="960" height="540"></canvas>
+
+    <div class="screen" id="title-screen">
+      <h1 class="logo">아레나 듀얼</h1>
+      <div class="menu">
+        <button class="btn primary" data-go="cpu-setup">CPU 대전</button>
+        <button class="btn primary" data-go="online-menu">온라인 대전</button>
+        <button class="btn" data-go="help-screen">조작법</button>
+        <a class="btn ghost" href="../">게임 허브로</a>
+      </div>
+      <div class="notice" id="title-notice"></div>
+    </div>
+
+    <div class="screen hidden" id="cpu-setup">
+      <h2>CPU 대전</h2>
+      <div class="pick-group">
+        <div class="pick-label">내 캐릭터</div>
+        <div class="char-row" data-pick="me"></div>
+      </div>
+      <div class="pick-group">
+        <div class="pick-label">CPU 캐릭터</div>
+        <div class="char-row" data-pick="cpu"></div>
+      </div>
+      <div class="pick-group">
+        <div class="pick-label">난이도</div>
+        <div class="seg" id="difficulty">
+          <button class="seg-btn" data-level="easy">쉬움</button>
+          <button class="seg-btn selected" data-level="normal">보통</button>
+          <button class="seg-btn" data-level="hard">어려움</button>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn" data-go="title-screen">뒤로</button>
+        <button class="btn primary" id="cpu-start">시작</button>
+      </div>
+    </div>
+
+    <div class="screen hidden" id="online-menu">
+      <h2>온라인 대전</h2>
+      <button class="btn primary" id="host-btn">방 만들기</button>
+      <div class="join-row">
+        <input id="join-code" maxlength="5" placeholder="방 코드" autocomplete="off" />
+        <button class="btn primary" id="join-btn">참가</button>
+      </div>
+      <div class="status" id="online-status"></div>
+      <button class="btn" data-go="title-screen">뒤로</button>
+    </div>
+
+    <div class="screen hidden" id="online-wait">
+      <h2>방 코드</h2>
+      <div class="room-code" id="room-code">-----</div>
+      <div class="status" id="wait-status">상대가 이 코드로 참가하기를 기다리는 중...</div>
+      <button class="btn" id="host-cancel">취소</button>
+    </div>
+
+    <div class="screen hidden" id="online-lobby">
+      <h2>캐릭터 선택</h2>
+      <div class="lobby-cols">
+        <div class="pick-group">
+          <div class="pick-label">나</div>
+          <div class="char-row" data-pick="online"></div>
+        </div>
+        <div class="pick-group">
+          <div class="pick-label">상대</div>
+          <div class="opponent-pick" id="opponent-pick">선택 중...</div>
+        </div>
+      </div>
+      <div class="status" id="lobby-status"></div>
+      <div class="row">
+        <button class="btn" id="lobby-leave">나가기</button>
+        <button class="btn primary" id="lobby-ready">준비</button>
+      </div>
+    </div>
+
+    <div class="screen hidden" id="help-screen">
+      <h2>조작법</h2>
+      <table class="keys">
+        <tr><td>이동 / 점프 / 앉기</td><td>W A S D 또는 방향키</td></tr>
+        <tr><td>약공격</td><td>J 또는 Z</td></tr>
+        <tr><td>강공격</td><td>K 또는 X</td></tr>
+        <tr><td>필살기</td><td>L 또는 C</td></tr>
+        <tr><td>가드</td><td>상대 반대 방향 유지 (앉아서 막으면 하단 가드)</td></tr>
+      </table>
+      <ul class="tips">
+        <li>점프 공격은 서서, 앉아 약공격은 앉아서 막아야 해요.</li>
+        <li>약공격이 맞거나 막히는 순간 강공격 → 필살기로 캔슬할 수 있어요.</li>
+        <li>레온의 파동검은 점프로 넘고, 가론의 승룡권은 시작 순간 무적이에요.</li>
+        <li>CPU 대전 중 ESC로 일시정지.</li>
+      </ul>
+      <button class="btn" data-go="title-screen">뒤로</button>
+    </div>
+
+    <div class="screen hidden dim" id="pause-screen">
+      <h2 id="pause-title">일시정지</h2>
+      <div class="status" id="pause-status"></div>
+      <button class="btn primary" id="resume-btn">계속</button>
+      <button class="btn" id="quit-btn">나가기</button>
+    </div>
+
+    <div class="screen hidden dim" id="result-screen">
+      <h2 id="result-title"></h2>
+      <div class="status" id="result-status"></div>
+      <div class="row">
+        <button class="btn primary" id="rematch-btn">다시 하기</button>
+        <button class="btn" id="result-menu-btn">메뉴로</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
