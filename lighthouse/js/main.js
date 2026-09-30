@@ -25,6 +25,7 @@ const clockEl = $("clock");
 const hintEl = $("hint");
 const menuEl = $("menu");
 const resultsEl = $("results");
+const paperEl = $("paper");
 
 // --- renderer: full-quality render into an HDR target, then each mosaic block is averaged
 // and dithered to four greys ---
@@ -173,6 +174,13 @@ document.addEventListener("keydown", (e) => {
     else closeup.key(e.code);
     return;
   }
+  if (reading) {
+    if (e.code === "Space") {
+      e.preventDefault();
+      advanceRadio();
+    } else if (e.code === "KeyE" || e.code === "Escape") closePaper();
+    return;
+  }
   if (mode !== "play") return;
   if (menu) {
     const n = Number(e.code.replace("Digit", ""));
@@ -198,11 +206,8 @@ const center = new THREE.Vector2(0, 0);
 let target = null;
 
 const NOT_YET = {
-  radio: "무전기 · 3단계에서 추가돼요",
-  logbook: "일지 · 3단계에서 추가돼요",
-  tape: "전신 테이프 · 3단계에서 추가돼요",
   survivor: "……  (생존자 대화는 4단계에서)",
-  telescope: "망원경 · 밤의 배 판단은 2단계에서",
+  telescope: "망원경 · 밤의 배 판단은 다음 단계에서",
 };
 
 let toastTimer = 0;
@@ -255,7 +260,7 @@ function chooseTask(i) {
   keys.clear();
   promptEl.textContent = "";
   document.exitPointerLock();
-  closeup.open(id, { mercury: () => mercury, eq: game.state.eq, drum: game.state.drum }, (res) => {
+  closeup.open(id, { mercury: () => mercury, eq: game.state.eq, drum: game.state.drum, mantles: game.state.mantles }, (res) => {
     // toast first so a phase change announced by complete() is the message left on screen
     if (!res.cancelled) toast(`${TASKS[id].name} 완료`);
     game.complete(id, res);
@@ -295,6 +300,120 @@ resultsEl.addEventListener("click", () => {
   showMenu(`${game.state.day}일차 · 클릭해서 시작`);
 });
 
+// --- reading screens: radio, telegraph tape, supply crate, logbook ---
+// they keep the pointer locked: Space shows the next radio line, E closes
+let reading = null; // { kind, lines?, shown?, timer? }
+const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+
+function openPaper(kind, html, extra = {}) {
+  reading = { kind, ...extra };
+  mode = "reading";
+  keys.clear();
+  closeMenu();
+  promptEl.textContent = "";
+  paperEl.className = `paper-${kind}`;
+  paperEl.innerHTML = html;
+  paperEl.classList.remove("hidden");
+}
+
+function closePaper() {
+  reading = null;
+  paperEl.classList.add("hidden");
+  if (document.pointerLockElement === view) mode = "play";
+  else showMenu("클릭해서 계속");
+}
+
+function radioLineHtml([who, text]) {
+  return `<div class="line">${who ? `<span class="who">${esc(who)}</span>` : ""}<span>${esc(text)}</span></div>`;
+}
+
+function openRadio() {
+  const lines = game.listenRadio();
+  if (!lines) {
+    toast("치지직…… 낮에만 교신이 잡힌다");
+    return;
+  }
+  openPaper("radio", `<div class="head">무전 · ${game.state.day}일차 낮</div><div class="body"></div><div class="foot">Space 다음 · E 닫기</div>`, {
+    lines,
+    shown: 0,
+    timer: 0,
+  });
+  advanceRadio();
+}
+
+function advanceRadio() {
+  if (!reading || reading.kind !== "radio" || reading.shown >= reading.lines.length) return;
+  paperEl.querySelector(".body").insertAdjacentHTML("beforeend", radioLineHtml(reading.lines[reading.shown]));
+  reading.shown++;
+  reading.timer = 0;
+  if (reading.shown >= reading.lines.length) paperEl.querySelector(".foot").textContent = "교신이 끊겼다 · E 닫기";
+}
+
+function openTape() {
+  const w = game.readTape();
+  if (!w) {
+    toast(game.state.phase === "dusk" ? "해 질 녘 일정을 마치면 전신이 온다" : "전신기가 조용하다");
+    return;
+  }
+  const rows = [];
+  rows.push(`== 해안 본부 → 암초 등대 · ${game.state.day}일차 ==`);
+  if (w.orders.length) {
+    rows.push("[지침]");
+    for (const o of w.orders) rows.push(`${o.changed ? "(변경) " : ""}${o.text}`);
+  }
+  rows.push("[입항 예정]");
+  for (const sh of w.ships) rows.push(`${sh.eta}  ${sh.kind} ${sh.name} · ${sh.flag}`);
+  rows.push(`[날씨] ${w.weather}`);
+  for (const n of w.notices) rows.push(`[공문] ${n}`);
+  rows.push("== 끝 ==");
+  openPaper("tape", `<div class="strip">${rows.map((r) => `<div>${esc(r)}</div>`).join("")}</div><div class="foot">E 닫기 · 일지에 옮겨 적었다</div>`);
+}
+
+function openSupply() {
+  const sup = game.openSupply();
+  if (!sup) return;
+  const goods = sup.goods.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
+  const news = sup.newspaper;
+  openPaper(
+    "supply",
+    `<div class="head">보급품 · ${game.state.day}일차</div>
+     <table>${goods}</table>
+     <div class="news"><div class="news-title">${esc(news.title)}</div>${news.lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>
+     <div class="sub">선원이 한 말</div>
+     ${sup.sailor.map((r) => `<div class="quote">“${esc(r)}”</div>`).join("")}
+     <div class="foot">E 닫기</div>`,
+  );
+}
+
+function openLogbook() {
+  const s = game.state;
+  const list = (items, empty) => (items.length ? items.join("") : `<div class="empty">${empty}</div>`);
+  const orders = list(
+    s.orders.map((o) => `<div class="item"><span class="day">${o.day}일</span>${o.changed ? "(변경) " : ""}${esc(o.text)}</div>`),
+    "받은 지침이 없다",
+  );
+  const ships = list(
+    s.tonight.map((sh) => `<div class="item"><span class="day">${esc(sh.eta)}</span>${esc(sh.kind)} ${esc(sh.name)} · ${esc(sh.flag)}</div>`),
+    s.today.tape ? "예정된 배가 없다" : "오늘 밤 전신을 아직 받지 않았다",
+  );
+  const notices = list(s.notices.map((n) => `<div class="item"><span class="day">${n.day}일</span>${esc(n.text)}</div>`), "없음");
+  const rumours = list(s.rumours.map((r) => `<div class="item"><span class="day">${r.day}일</span>${esc(r.text)}</div>`), "들은 소문이 없다");
+  const radio = list(
+    s.radioLog.map((r) => `<div class="item"><span class="day">${r.day}일</span>${r.lines.filter(([w]) => w).map(([w, t]) => `${esc(w)}: ${esc(t)}`).join("<br>")}</div>`),
+    "기록된 교신이 없다",
+  );
+  openPaper(
+    "log",
+    `<div class="head">등대 일지 · ${s.day}일차</div>
+     <div class="sub">현재 지침</div>${orders}
+     <div class="sub">오늘 밤 입항 예정${s.weather ? ` · 날씨 ${esc(s.weather)}` : ""}</div>${ships}
+     <div class="sub">공문</div>${notices}
+     <div class="sub">들은 소문</div>${rumours}
+     <div class="sub">무전 기록</div>${radio}
+     <div class="foot">E 닫기</div>`,
+  );
+}
+
 function interact(info) {
   if (info.id === "lantern") {
     pickUpLantern();
@@ -304,6 +423,10 @@ function interact(info) {
     openMenu(info.id);
     return;
   }
+  if (info.id === "radio") return openRadio();
+  if (info.id === "tape") return openTape();
+  if (info.id === "crate") return openSupply();
+  if (info.id === "logbook") return openLogbook();
   toast(NOT_YET[info.id] || info.label);
 }
 
@@ -314,7 +437,7 @@ function findTarget() {
   if (!hit) return null;
   let o = hit.object;
   while (o && !o.userData.interact) o = o.parent;
-  if (!o) return null;
+  if (!o || !o.visible) return null;
   const reach = o.userData.reach || REACH;
   return hit.distance <= reach ? o : null;
 }
@@ -484,6 +607,12 @@ function frame() {
     if (holding) updateHeldLantern(dt, t, jumped > 0.0005);
     animateWorld(world, t);
     setTimeOfDay(world, game.visualHours, game.state.lampOn, game.rotating, dt);
+    world.supply.crate.visible = game.supplyWaiting;
+    world.supply.boat.visible = game.supplyBoatHere;
+    if (reading && reading.kind === "radio") {
+      reading.timer += dt;
+      if (reading.timer > 1.8) advanceRadio();
+    }
 
     target = mode === "play" ? findTarget() : null;
     promptEl.textContent = target ? `E  ${target.userData.interact.label}` : "";
@@ -520,4 +649,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // dev hook for automated checks
-window.__lh = { player, world, interact, diag, game, closeup, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
+window.__lh = { player, world, interact, diag, game, closeup, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };

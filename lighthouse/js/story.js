@@ -1,0 +1,112 @@
+// Five days of daytime radio, supply-boat visits and evening telegrams.
+// Flags are told apart by pattern, not colour — the game is greyscale.
+// Orders carry an id so a later telegram can replace an earlier one.
+
+export const FLAGS = {
+  home: "흰 바탕 검은 십자기",
+  neutral: "가로 줄무늬 기",
+  military: "검은 삼각기",
+  blank: "무늬 없는 기",
+};
+
+export const STORY = [
+  {
+    radio: [
+      ["", "……치직…… 치지직……"],
+      ["어선 갈매기 3호", "어젯밤 북쪽 암초 쪽에 불빛이 없었다던데. 누가 봤대."],
+      ["화물선 에델호", "등대는 켜져 있었어. 자네가 또 술을 마셨겠지."],
+      ["어선 갈매기 3호", "……아무튼 보급선은 오늘 온다더군. 등대지기 양반 좋겠어."],
+      ["", "……치직……"],
+    ],
+    supply: {
+      goods: [
+        ["석유", 150],
+        ["여분 맨틀", 4],
+        ["식량", "1주일치"],
+      ],
+      newspaper: {
+        title: "해안 방어선 굳건",
+        lines: ["본국 함대, ████ 해역에서 적 수송선단 격파", "정부 “전쟁은 ██월 안에 끝난다”", "북부 ███ 지방 이동 제한 · 자세한 사항은 ████"],
+      },
+      sailor: [
+        "요즘 검은 삼각기 단 배들이 밤에만 다녀. 군 보급선이라는데, 누가 알겠어.",
+        "북쪽 마을에 역병이 돈대. 그쪽에서 나오는 배는 조심하라고.",
+        "본부 통신 담당이 바뀌었다더라. 목소리 들어보면 알 거야.",
+      ],
+    },
+    wire: {
+      orders: [
+        { id: "home", text: `${FLAGS.home}(본국 선적) 선박은 등을 밝혀 인도할 것.` },
+        { id: "blank", text: `${FLAGS.blank}(무등록) 선박은 신호로 정지시키고 정체를 확인할 것.` },
+      ],
+      ships: [
+        { name: "에델호", kind: "화물선", flag: FLAGS.home, eta: "21:00" },
+        { name: "갈매기 3호", kind: "어선", flag: FLAGS.neutral, eta: "23:30" },
+      ],
+      weather: "맑음 · 서풍 약함",
+      notices: ["등대지기 급여는 매주 보급선으로 지급함."],
+    },
+  },
+  {
+    radio: [
+      ["", "……치지직……"],
+      ["???", "메이데이…… 메이데이…… 여기는 로사…… 선체에 물이 차고 있다……"],
+      ["???", "위치는…… 등대 남동쪽…… 불을…… 불을 켜 줘……"],
+      ["", "……치직…… (교신이 끊겼다)"],
+    ],
+    wire: {
+      orders: [{ id: "dark", text: "등을 끈 채 항해하는 선박(무등화)은 정지시키고 본부에 보고할 것." }],
+      ships: [{ name: "제7 초계정", kind: "군함", flag: FLAGS.military, eta: "22:00" }],
+      weather: "밤부터 짙은 안개",
+      notices: [],
+    },
+  },
+  {
+    radio: [
+      ["", "……치직……"],
+      ["본부", "등대, 여기는 본부. 오늘 밤 검은 삼각기 선박이 보이면 불을 꺼라."],
+      ["본부", "반복한다. 불을 꺼라. 이 지시는 기록하지 마라."],
+      ["", "……치지직……"],
+    ],
+    wire: {
+      orders: [],
+      ships: [
+        { name: "마르타호", kind: "화물선", flag: FLAGS.home, eta: "20:30" },
+        { name: "제7 초계정", kind: "군함", flag: FLAGS.military, eta: "01:00" },
+      ],
+      weather: "흐림 · 북풍",
+      notices: ["다음 보급선은 8일째에 입항함."],
+    },
+  },
+  {
+    radio: [
+      ["", "……"],
+      ["본부", "여기는 본부. 지금까지의 모든 지침을 해제한다."],
+      ["본부", "오늘 밤부터 모든 선박을 통과시켜라. 확인 신호는 필요 없다."],
+      ["", "……치직……"],
+    ],
+    wire: {
+      orders: [{ id: "home", text: `${FLAGS.home} 선박도 정지시켜 검문할 것. 적이 본국 선적을 위장하고 있음.`, changed: true }],
+      ships: [
+        { name: "에델호", kind: "화물선", flag: FLAGS.home, eta: "21:30" },
+        { name: "이름 없음", kind: "소형선", flag: FLAGS.blank, eta: "미상" },
+      ],
+      weather: "비 · 남동풍 강함",
+      notices: [],
+    },
+  },
+  {
+    radio: [
+      ["", "……치지지직……"],
+      ["??? (본부라고 함)", "등대, 여기는 해안 본부다. 이전 통신 담당자는 반역 혐의로 체포되었다."],
+      ["??? (본부라고 함)", "그자가 보낸 지침은 모두 무효다. 새 지침을 기다려라."],
+      ["", "……치직……"],
+    ],
+    wire: {
+      orders: [],
+      ships: [{ name: "갈매기 3호", kind: "어선", flag: FLAGS.neutral, eta: "22:00" }],
+      weather: "폭풍 접근",
+      notices: ["등대 운영 감사를 실시함. 일지를 빠짐없이 기록할 것.", "기상 악화로 다음 보급선 입항이 연기됨."],
+    },
+  },
+];

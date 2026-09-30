@@ -87,7 +87,9 @@ export function createCloseup(canvas, help) {
   const GAMES = {
     // fit a fragile mantle over the burner nozzle
     mantle: {
-      init: () => ({ phase: "carry", spares: 5, threaded: false, armed: false, lastBottom: mouse.y }),
+      init: (ctx) => ({ phase: "carry", spares: ctx.mantles, start: ctx.mantles, threaded: false, armed: false, lastBottom: mouse.y }),
+      // mantles broken before giving up are still gone
+      onCancel: (s) => ({ used: s.start - s.spares }),
       update(s, dt, io) {
         const NX = 192;
         const TOP = 138;
@@ -130,14 +132,14 @@ export function createCloseup(canvas, help) {
             } else s.threaded = true;
           }
           if (s.threaded && bottom < TOP - 2) s.threaded = false;
-          if (s.threaded && bottom >= SEAT) return { help: "맨틀을 끼웠다", result: { ok: true } };
+          if (s.threaded && bottom >= SEAT) return { help: "맨틀을 끼웠다", result: { ok: true, used: s.start - s.spares + 1 } };
           if (s.phase === "carry") drawMantle(s.threaded ? NX + (x - NX) * 0.2 : x, bottom - 26, false);
         }
         if (s.phase === "broken") {
           s.timer += dt;
           drawMantle(s.brokenAt.x, s.brokenAt.y, true);
           if (s.timer > 1.2) {
-            if (s.spares <= 0) return { help: "여분 맨틀이 없다", result: { ok: false } };
+            if (s.spares <= 0) return { help: "여분 맨틀이 없다", result: { ok: false, used: s.start } };
             Object.assign(s, { phase: "carry", threaded: false, armed: false, lastBottom: io.hand.y });
           }
           return { help: `${s.reason}\n여분 ${s.spares}개` };
@@ -406,7 +408,7 @@ export function createCloseup(canvas, help) {
       keyQueue.push(code);
     },
     cancel() {
-      if (cur) finish({ cancelled: true });
+      if (cur) finish({ cancelled: true, ...(cur.game.onCancel ? cur.game.onCancel(cur.s) : {}) });
     },
     update(dt) {
       if (!cur) return;

@@ -1,18 +1,20 @@
-// Day structure, clock, equipment and maintenance tasks for the 5-day build.
-// Phases: dawn (a fixed number of maintenance jobs) → day (paused for now) → dusk (light the lamp,
-// plus one job) → night (paused for now) → results → next dawn. The clock only moves when a job is done.
+// Day structure, clock, equipment, maintenance and the day's information for the 5-day build.
+// Phases: dawn (a fixed number of maintenance jobs) → day (radio; the supply boat on its days) →
+// dusk (light the lamp, plus one job) → wire (the evening telegram) → night (paused for now) →
+// results → next dawn. The clock only moves when a job is done.
+import { STORY } from "./story.js";
 
 export const DAWN_JOBS = 4;
 const DUSK_JOBS = 1;
 
 export const DAYS = 5;
-const PHASE_NAMES = { dawn: "새벽", day: "낮", dusk: "해 질 녘", night: "밤", results: "밤" };
+const PHASE_NAMES = { dawn: "새벽", day: "낮", dusk: "해 질 녘", wire: "저녁", night: "밤", results: "밤" };
 
 export const TASKS = {
   mantle: { name: "맨틀 교체", minutes: 20, exposure: 2, phases: ["dawn", "dusk"] },
   lens: { name: "렌즈 닦기", minutes: 20, exposure: 3, phases: ["dawn", "dusk"] },
   pump: { name: "압력 펌프질", minutes: 10, exposure: 1, phases: ["dawn", "dusk"] },
-  ignite: { name: "예열과 점화", minutes: 10, exposure: 1, phases: ["dusk", "night"] },
+  ignite: { name: "예열과 점화", minutes: 10, exposure: 1, phases: ["dusk", "wire"] },
   filter: { name: "수은 욕조 거르기", minutes: 40, exposure: 14, phases: ["dawn"] },
   spill: { name: "쏟아진 수은 모으기", minutes: 30, exposure: 10, phases: ["dawn", "dusk"] },
   wind: { name: "태엽 감기", minutes: 15, exposure: 0, phases: ["dawn", "dusk"] },
@@ -46,10 +48,21 @@ export function createGame(hooks) {
     jobs: DAWN_JOBS,
     eq: { mantle: 55, bath: 45, lens: 50, wound: 0, pressure: 0, tank: 40 },
     drum: 300,
+    mantles: 3, // spare mantles on the shelf
     spill: false,
     done: [],
     night: null,
+    // what the keeper has been told; the logbook shows these
+    orders: [],
+    tonight: [],
+    rumours: [],
+    radioLog: [],
+    notices: [],
+    weather: null,
+    today: { radio: false, supply: false, tape: false },
   };
+
+  const story = () => STORY[g.day - 1] || {};
 
   function enterDay() {
     g.phase = "day";
@@ -71,6 +84,7 @@ export function createGame(hooks) {
       hoursLit = Math.min(hoursLit, 3);
       notes.push("압력이 떨어져 불꽃이 사그라들었다");
     }
+    if (!g.today.tape) notes.push("전신 테이프를 읽지 않은 채 밤을 맞았다");
     const brightness = lit ? (0.4 * e.mantle + 0.35 * e.lens + 0.25 * clamp(e.pressure / 0.8)) / 100 : 0;
     const rotation = !lit ? "-" : e.wound >= 60 ? "밤새 돌았다" : e.wound > 0 ? "한밤중에 멈췄다" : "돌지 않았다";
     const steady = e.bath >= 50;
@@ -124,14 +138,21 @@ export function createGame(hooks) {
     },
     hint() {
       if (g.phase === "dawn") return `정비 ${g.jobs}/${DAWN_JOBS}회 남음 · N 정비 마치기${g.spill ? " · 렌즈실 바닥에 수은이 흘러 있다" : ""}`;
-      if (g.phase === "day") return "N  해 질 녘으로 넘기기 (낮 활동은 다음 단계에서)";
-      if (g.phase === "dusk") return g.lampOn ? `N  밤으로 넘기기${g.jobs ? ` · 정비 ${g.jobs}회 가능` : ""}` : "렌즈실에서 예열과 점화 · 켜지 않고 N을 누르면 등불 없는 밤";
+      if (g.phase === "day") {
+        const todo = [];
+        if (!g.today.radio) todo.push("무전을 들을 수 있다");
+        if (api.supplyWaiting) todo.push("보급선이 왔다 · 무전실의 상자 확인");
+        return `${todo.length ? todo.join(" · ") + " · " : ""}N 해 질 녘으로`;
+      }
+      if (g.phase === "dusk") return g.lampOn ? `N  일정 마치기${g.jobs ? ` · 정비 ${g.jobs}회 가능` : ""}` : "렌즈실에서 예열과 점화 · 켜지 않고 N을 누르면 등불 없는 밤";
+      if (g.phase === "wire") return g.today.tape ? "N  밤으로 넘기기 (배 판단은 다음 단계에서)" : "전신이 왔다 · 무전실 전신기에서 테이프 읽기 · N 밤으로";
       if (g.phase === "night") return "N  새벽으로 넘기기 (배 판단은 다음 단계에서)";
       return "";
     },
     // hours used for lighting: the paused phases show midday and deep night
     get visualHours() {
       if (g.phase === "day") return 12;
+      if (g.phase === "wire") return 19.2;
       if (g.phase === "night" || g.phase === "results") return 23;
       return g.minutes / 60;
     },
@@ -154,12 +175,13 @@ export function createGame(hooks) {
       if (!t.phases.includes(g.phase)) return `${t.phases.map((p) => PHASE_NAMES[p]).join("·")}에만`;
       if (id === "ignite" && g.lampOn) return "이미 켜져 있음";
       if (id !== "ignite" && g.jobs <= 0) return "오늘 정비 횟수를 다 썼음";
+      if (id === "mantle" && g.mantles <= 0) return "여분 맨틀 없음";
       if (id === "refuel" && g.drum <= 0) return "드럼이 비었음";
       return null;
     },
     status(station) {
       const e = g.eq;
-      if (station === "lens") return `맨틀 ${condition(e.mantle)} · 렌즈 ${condition(e.lens)} · 압력 ${condition(e.pressure)}`;
+      if (station === "lens") return `맨틀 ${condition(e.mantle)} (여분 ${g.mantles}) · 렌즈 ${condition(e.lens)} · 압력 ${condition(e.pressure)}`;
       if (station === "filter") return `수은 욕조 ${condition(e.bath)}`;
       if (station === "wind") return e.wound > 0 ? "태엽이 감겨 있다" : "태엽이 풀려 있다";
       if (station === "drum") return `탱크 ${condition(e.tank)} · 드럼 남은 양 ${Math.round(g.drum)}`;
@@ -168,8 +190,15 @@ export function createGame(hooks) {
     complete(id, res) {
       const t = TASKS[id];
       const e = g.eq;
-      if (!res || res.cancelled) return;
-      if (id === "mantle" && res.ok) e.mantle = 100;
+      if (!res) return;
+      if (res.cancelled) {
+        if (id === "mantle" && res.used) g.mantles = Math.max(0, g.mantles - res.used);
+        return;
+      }
+      if (id === "mantle") {
+        g.mantles = Math.max(0, g.mantles - res.used);
+        if (res.ok) e.mantle = 100;
+      }
       if (id === "lens") e.lens = clamp(res.clarity);
       if (id === "pump") e.pressure = clamp(res.pressure);
       if (id === "ignite" && res.lit) g.lampOn = true;
@@ -205,6 +234,12 @@ export function createGame(hooks) {
         return null;
       }
       if (g.phase === "dusk") {
+        g.phase = "wire";
+        g.minutes = 19 * 60;
+        hooks.toast("무전실에서 전신기가 딸깍거리기 시작했다");
+        return null;
+      }
+      if (g.phase === "wire") {
         enterNight();
         return null;
       }
@@ -220,6 +255,56 @@ export function createGame(hooks) {
       g.jobs = DAWN_JOBS;
       g.done = [];
       g.night = null;
+      g.tonight = [];
+      g.weather = null;
+      g.today = { radio: false, supply: false, tape: false };
+    },
+    // --- the day's information ---
+    get supplyWaiting() {
+      return g.phase === "day" && !!story().supply && !g.today.supply;
+    },
+    get supplyBoatHere() {
+      return g.phase === "day" && !!story().supply;
+    },
+    get wireWaiting() {
+      return g.phase === "wire" && !g.today.tape;
+    },
+    listenRadio() {
+      if (g.phase !== "day") return null;
+      const lines = story().radio || [];
+      if (!g.today.radio) {
+        g.today.radio = true;
+        g.radioLog.push({ day: g.day, lines });
+      }
+      return lines;
+    },
+    openSupply() {
+      if (!api.supplyWaiting) return null;
+      const sup = story().supply;
+      g.today.supply = true;
+      for (const [name, n] of sup.goods) {
+        if (name === "석유") g.drum += n;
+        if (name === "여분 맨틀") g.mantles += n;
+      }
+      for (const r of sup.sailor) g.rumours.push({ day: g.day, from: "보급선 선원", text: r });
+      return sup;
+    },
+    readTape() {
+      if (g.phase !== "wire") return null;
+      const w = story().wire;
+      if (!g.today.tape) {
+        g.today.tape = true;
+        for (const o of w.orders) {
+          const i = g.orders.findIndex((x) => x.id === o.id);
+          const entry = { ...o, day: g.day };
+          if (i >= 0) g.orders[i] = entry;
+          else g.orders.push(entry);
+        }
+        g.tonight = w.ships;
+        g.weather = w.weather;
+        for (const n of w.notices) g.notices.push({ day: g.day, text: n });
+      }
+      return w;
     },
     // extra mercury from the floor while a spill lies there
     get spillRate() {

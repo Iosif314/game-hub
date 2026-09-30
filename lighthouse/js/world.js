@@ -426,6 +426,13 @@ export function buildWorld(scene) {
   const scopeA = deg(10);
   place(M.telescope(), polar(scopeA, R + 1.0, FLOOR_H), Math.PI - scopeA, { id: "telescope", label: "망원경 보기" }, 0.3);
 
+  // supply boat moored off the rocks and the crate it leaves in the radio room (shown on supply days)
+  const crate = place(M.supplyCrate(), polar(deg(170), 1.9), deg(20), { id: "crate", label: "보급품 확인" });
+  const boat = M.supplyBoat();
+  boat.position.copy(polar(deg(35), 16, SEA_Y + 0.4));
+  boat.rotation.y = -deg(35) + Math.PI / 2;
+  scene.add(boat);
+
   // a ship far out at sea
   const shipM = M.ship();
   shipM.position.set(-150, SEA_Y + 0.2, -180);
@@ -454,7 +461,7 @@ export function buildWorld(scene) {
     beamAngle: 0,
   };
 
-  return { interactables, solids, animated, env, lantern, lanternLight: deskLamp, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
+  return { interactables, solids, animated, env, supply: { crate, boat }, lantern, lanternLight: deskLamp, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
 }
 
 export function animateWorld(world, t) {

@@ -312,3 +312,27 @@ export function ship() {
   }
   return g;
 }
+
+// wooden supply crate left in the radio room by the boat crew
+export function supplyCrate() {
+  const g = new THREE.Group();
+  const plank = std(0x6b5b46, { roughness: 0.9 });
+  g.add(mesh(new THREE.BoxGeometry(0.7, 0.45, 0.5), plank, 0, 0.225, 0));
+  for (const y of [0.08, 0.37]) g.add(mesh(new THREE.BoxGeometry(0.72, 0.05, 0.52), WOOD, 0, y, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.3, 0.02, 0.2), PAPER, 0.1, 0.46, 0.05));
+  return g;
+}
+
+// small steam launch that brings the supplies
+export function supplyBoat() {
+  const g = new THREE.Group();
+  const hull = std(0x2b2a28, { roughness: 0.9 });
+  g.add(mesh(new THREE.BoxGeometry(7, 1.2, 2.4), hull, 0, 0.3, 0));
+  const bow = mesh(new THREE.ConeGeometry(1.2, 2.2, 4), hull, 4.4, 0.3, 0);
+  bow.rotation.set(0, Math.PI / 4, -Math.PI / 2);
+  g.add(bow);
+  g.add(mesh(new THREE.BoxGeometry(2.4, 1.3, 1.8), std(0x8d877a), -0.8, 1.55, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.6, 8), std(0x1e1d1c), -0.3, 2.9, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 3, 5), WOOD, 1.8, 2.3, 0));
+  return g;
+}
