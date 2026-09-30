@@ -86,6 +86,7 @@ export function lensAssembly() {
   const flame = mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.17, 8), FLAME, 0, 1.76, 0);
   flame.userData.noShadow = true;
   g.add(flame);
+  g.userData.flame = flame;
   return g;
 }
 

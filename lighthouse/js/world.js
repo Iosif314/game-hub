@@ -119,7 +119,12 @@ export function buildWorld(scene) {
   scene.add(sky);
 
   // lights: low dawn sun, soft fill, the desk lamp and the lighthouse lamp itself
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.18));
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.18);
+  scene.add(hemi);
+  // faint moonlight for the nights
+  const moon = new THREE.DirectionalLight(0xffffff, 0);
+  moon.position.set(50, 60, -30);
+  scene.add(moon);
   const sun = new THREE.DirectionalLight(0xffffff, 2.6);
   sun.position.set(-60, 25, 40);
   sun.castShadow = true;
@@ -179,6 +184,9 @@ export function buildWorld(scene) {
   column.position.y = FLOOR_H / 2;
   scene.add(column);
   solids.push(column);
+  // the winding crank sits on the weight tube
+  column.userData.interact = { id: "wind", label: "태엽 감기" };
+  interactables.push(column);
 
   // spiral stairs
   const stepGeo = new THREE.BoxGeometry(STAIR_R1 - STAIR_R0, 0.14, 0.72);
@@ -301,10 +309,11 @@ export function buildWorld(scene) {
     fog: false,
   });
   for (const dir of [1, -1]) {
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(6, 90, 16, 1, true), beamMat);
+    // narrow (lens-sized) at the lantern, widening out to sea
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 6, 90, 16, 1, true), beamMat);
     cone.userData.noShadow = true;
     cone.rotation.z = (dir * Math.PI) / 2;
-    cone.position.x = -dir * 45;
+    cone.position.x = dir * 45;
     beam.add(cone);
   }
   beam.position.y = FLOOR_H + 1.35;
@@ -312,6 +321,7 @@ export function buildWorld(scene) {
   animated.beam = beam;
 
   // --- objects (low-poly models) ---
+  const windowMats = [];
   const faceCentre = (a) => Math.atan2(-Math.cos(a), -Math.sin(a));
   const place = (obj, pos, rotY, info, obstacle) => {
     obj.position.copy(pos);
@@ -363,10 +373,9 @@ export function buildWorld(scene) {
     [deg(160), 1.7],
     [deg(60), 1.7],
   ]) {
-    const w = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.55, 0.85),
-      new THREE.MeshBasicMaterial({ map: sp.window, transparent: true, alphaTest: 0.5 }),
-    );
+    const wm = new THREE.MeshBasicMaterial({ map: sp.window, transparent: true, alphaTest: 0.5 });
+    windowMats.push(wm);
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(0.55, 0.85), wm);
     onWall(w, a, y);
     scene.add(w);
   }
@@ -376,7 +385,7 @@ export function buildWorld(scene) {
   animated.survivor = person;
 
   // lantern
-  const lens = place(M.lensAssembly(), new THREE.Vector3(0, FLOOR_H, 0), 0, { id: "mantle", label: "맨틀 교체" });
+  const lens = place(M.lensAssembly(), new THREE.Vector3(0, FLOOR_H, 0), 0, { id: "lens", label: "렌즈 작업" });
   lens.userData.reach = 2.2;
   lensLamp.position.set(0, FLOOR_H + 1.76, 0);
   place(M.filterKit(), polar(deg(20), 3.3, FLOOR_H), 0.8, { id: "filter", label: "수은 욕조 거르기" }, 0.28);
@@ -399,14 +408,54 @@ export function buildWorld(scene) {
   });
   sea.castShadow = false;
 
-  return { interactables, solids, animated, lantern, lanternLight: deskLamp, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
+  const env = {
+    sun,
+    moon,
+    hemi,
+    skyMat: sky.material,
+    background: scene.background,
+    fog: scene.fog,
+    windows: windowMats,
+    lensLamp,
+    flame: lens.userData.flame,
+    beam,
+    beamAngle: 0,
+  };
+
+  return { interactables, solids, animated, env, lantern, lanternLight: deskLamp, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
 }
 
 export function animateWorld(world, t) {
-  const { seaTime, beam, ship, survivor } = world.animated;
+  const { seaTime, ship, survivor } = world.animated;
   seaTime.value = t;
-  beam.rotation.y = -t * 0.5;
   ship.position.x = -150 + ((t * 1.2) % 300);
   // slow breathing
   survivor.userData.torso.scale.set(1 + Math.sin(t * 1.6) * 0.015, 1, 1 + Math.sin(t * 1.6) * 0.02);
+}
+
+const smooth = (a, b, x) => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+// Sun arc from 06:00 to 18:00, dim moonlight at night; the lamp and its beam only when lit
+export function setTimeOfDay(world, hours, lampOn, rotating, dt) {
+  const e = world.env;
+  const arc = (Math.PI * (hours - 6)) / 12;
+  const elev = Math.sin(arc);
+  const dayF = smooth(-0.08, 0.35, elev);
+  e.sun.intensity = 2.6 * smooth(0, 0.25, elev);
+  e.sun.position.set(-80 * Math.cos(arc), 70 * Math.max(elev, 0.02), 40);
+  e.moon.intensity = (1 - dayF) * 0.35;
+  e.hemi.intensity = 0.05 + 0.13 * dayF;
+  const skyV = 0.08 + 0.92 * dayF;
+  e.skyMat.color.setScalar(skyV);
+  e.background.setRGB(0.553 * skyV, 0.541 * skyV, 0.518 * skyV);
+  e.fog.color.copy(e.background);
+  for (const m of e.windows) m.color.setScalar(0.15 + 0.85 * dayF);
+  e.lensLamp.intensity = lampOn ? 8 : 0;
+  e.flame.visible = lampOn;
+  e.beam.visible = lampOn;
+  if (lampOn && rotating) e.beamAngle -= dt * 0.5;
+  e.beam.rotation.y = e.beamAngle;
 }

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { buildWorld, animateWorld, groundAt, blocked, zoneOf } from "./world.js";
+import { buildWorld, animateWorld, setTimeOfDay, groundAt, blocked, zoneOf } from "./world.js";
+import { createGame, TASKS, DAYS } from "./game.js";
 import { createCloseup } from "./closeup.js";
 
 // mosaic grid; the scene is rendered SS× larger and averaged down per block
@@ -20,6 +21,10 @@ const toastEl = $("toast");
 const debugEl = $("debug");
 const debugText = $("debug-text");
 const slider = $("mercury-slider");
+const clockEl = $("clock");
+const hintEl = $("hint");
+const menuEl = $("menu");
+const resultsEl = $("results");
 
 // --- renderer: full-quality render into an HDR target, then each mosaic block is averaged
 // and dithered to four greys ---
@@ -114,7 +119,7 @@ const keys = new Set();
 let mode = "menu";
 let debugOn = false;
 
-const closeup = createCloseup($("closeup"), $("closeup-help"), 384, 216);
+const closeup = createCloseup($("closeup"), $("closeup-help"));
 
 // unadjustedMovement skips OS acceleration and avoids Chrome's occasional bogus movement spikes
 function lockPointer() {
@@ -138,6 +143,7 @@ document.addEventListener("pointerlockchange", () => {
 
 function showMenu(hint) {
   mode = "menu";
+  closeMenu();
   overlayHint.textContent = hint;
   overlay.classList.remove("hidden");
   keys.clear();
@@ -162,14 +168,22 @@ document.addEventListener("keydown", (e) => {
     debugEl.classList.toggle("hidden", !debugOn);
     return;
   }
-  if (e.code === "Escape" && closeup.active) {
-    closeup.cancel();
+  if (closeup.active) {
+    if (e.code === "Escape") closeup.cancel();
+    else closeup.key(e.code);
     return;
   }
   if (mode !== "play") return;
+  if (menu) {
+    const n = Number(e.code.replace("Digit", ""));
+    if (e.code.startsWith("Digit") && n >= 1) chooseTask(n - 1);
+    else if (e.code === "KeyE") closeMenu();
+    return;
+  }
   keys.add(e.code);
   if (e.code === "KeyE" && target) interact(target.userData.interact);
   if (e.code === "KeyG" && holding) putDownLantern();
+  if (e.code === "KeyN") skipPhase();
 });
 document.addEventListener("keyup", (e) => keys.delete(e.code));
 
@@ -184,13 +198,11 @@ const center = new THREE.Vector2(0, 0);
 let target = null;
 
 const NOT_YET = {
-  radio: "무전기 · 시험판에는 아직 없어요",
-  logbook: "일지 · 시험판에는 아직 없어요",
-  tape: "전신 테이프 · 시험판에는 아직 없어요",
-  drum: "석유 보충 · 시험판에는 아직 없어요",
-  survivor: "……  (생존자 대화는 다음 단계에서)",
-  filter: "수은 욕조 거르기 · 시험판에는 아직 없어요",
-  telescope: "망원경 · 밤에 쓰는 장비예요",
+  radio: "무전기 · 3단계에서 추가돼요",
+  logbook: "일지 · 3단계에서 추가돼요",
+  tape: "전신 테이프 · 3단계에서 추가돼요",
+  survivor: "……  (생존자 대화는 4단계에서)",
+  telescope: "망원경 · 밤의 배 판단은 2단계에서",
 };
 
 let toastTimer = 0;
@@ -199,21 +211,95 @@ function toast(text) {
   toastTimer = 2.5;
 }
 
+// --- day structure and maintenance ---
+const game = createGame({
+  toast,
+  expose(amount) {
+    mercury = Math.max(0, Math.min(100, mercury + amount));
+  },
+});
+
+// station menu: pick a task with the number keys so the pointer can stay locked
+let menu = null; // { station, tasks }
+function openMenu(station) {
+  const tasks = game.stationTasks(station);
+  menu = { station, tasks };
+  const rows = tasks.map((id, i) => {
+    const t = TASKS[id];
+    const why = game.blockedReason(id);
+    return `<div class="${why ? "off" : ""}">${i + 1}  ${t.name} · ${t.minutes}분${why ? `  (${why})` : ""}</div>`;
+  });
+  menuEl.innerHTML = `<div class="menu-status">${game.status(station)}</div>${rows.join("")}<div class="menu-foot">번호로 선택 · E 닫기</div>`;
+  menuEl.classList.remove("hidden");
+}
+function closeMenu() {
+  menu = null;
+  menuEl.classList.add("hidden");
+}
+function chooseTask(i) {
+  const id = menu && menu.tasks[i];
+  if (!id) return;
+  const why = game.blockedReason(id);
+  if (why) {
+    toast(`${TASKS[id].name} · ${why}`);
+    return;
+  }
+  closeMenu();
+  if (id === "spill") {
+    game.complete("spill", {});
+    toast("쏟아진 수은을 모았다");
+    return;
+  }
+  mode = "closeup";
+  keys.clear();
+  promptEl.textContent = "";
+  document.exitPointerLock();
+  closeup.open(id, { mercury: () => mercury, eq: game.state.eq, drum: game.state.drum }, (res) => {
+    game.complete(id, res);
+    if (!res.cancelled) toast(`${TASKS[id].name} 완료`);
+    showMenu("클릭해서 계속");
+  });
+}
+
+function skipPhase() {
+  const summary = game.skip();
+  if (summary) showResults(summary);
+}
+
+function showResults(r) {
+  mode = "results";
+  keys.clear();
+  closeMenu();
+  document.exitPointerLock();
+  const rows = (list) => list.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join("");
+  resultsEl.innerHTML = `
+    <h2>${r.day}일차 밤</h2>
+    <table>${rows(r.lines)}</table>
+    ${r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
+    <h3>오늘 한 일</h3>
+    <div class="done">${r.done.length ? r.done.join("<br>") : "아무것도 하지 않았다"}</div>
+    <h3>다음 날 장비 상태</h3>
+    <table>${rows(r.tomorrow)}</table>
+    <div class="hint">${r.last ? "시험판의 마지막 날이에요 · 클릭하면 처음부터" : "클릭해서 다음 날로"}</div>`;
+  resultsEl.classList.remove("hidden");
+}
+resultsEl.addEventListener("click", () => {
+  resultsEl.classList.add("hidden");
+  if (game.state.day >= DAYS) {
+    location.reload();
+    return;
+  }
+  game.nextDay();
+  showMenu(`${game.state.day}일차 · 클릭해서 시작`);
+});
+
 function interact(info) {
   if (info.id === "lantern") {
     pickUpLantern();
     return;
   }
-  if (info.id === "mantle") {
-    mode = "closeup";
-    keys.clear();
-    promptEl.textContent = "";
-    document.exitPointerLock();
-    closeup.open("mantle", (result) => {
-      if (result === "done") toast("맨틀을 새로 끼웠다");
-      else if (result === "out") toast("맨틀이 다 부서졌다");
-      showMenu("클릭해서 계속");
-    });
+  if (info.id === "lens" || info.id === "filter" || info.id === "wind" || info.id === "drum") {
+    openMenu(info.id);
     return;
   }
   toast(NOT_YET[info.id] || info.label);
@@ -347,7 +433,8 @@ function move(dt) {
 }
 
 function updateMercury(dt, zone) {
-  const rate = { lantern: 0.5, gallery: -0.4, radio: -0.05, stairs: -0.05 }[zone];
+  // per real second; a mercury spill on the lantern floor doubles what the room gives off
+  const rate = { lantern: 0.12 * game.spillRate, gallery: -0.2, radio: -0.03, stairs: -0.03 }[zone];
   mercury = Math.max(0, Math.min(100, mercury + rate * dt));
   if (document.activeElement !== slider) slider.value = String(Math.round(mercury));
 }
@@ -373,8 +460,11 @@ function frame() {
   const t = clock.elapsedTime;
 
   if (closeup.active) {
-    closeup.update(dt, mercury);
+    closeup.update(dt);
   } else {
+    if (mode === "play" && !menu) game.tick(dt);
+    clockEl.textContent = game.clockText();
+    hintEl.textContent = game.hint();
     before.copy(player.pos);
     if (mode === "play") move(dt);
     const jumped = before.distanceTo(player.pos);
@@ -390,6 +480,7 @@ function frame() {
     camera.rotation.set(player.pitch, player.yaw, 0);
     if (holding) updateHeldLantern(dt, t, jumped > 0.0005);
     animateWorld(world, t);
+    setTimeOfDay(world, game.visualHours, game.state.lampOn, game.rotating, dt);
 
     target = mode === "play" ? findTarget() : null;
     promptEl.textContent = target ? `E  ${target.userData.interact.label}` : "";
@@ -426,4 +517,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // dev hook for automated checks
-window.__lh = { player, world, interact, diag, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
+window.__lh = { player, world, interact, diag, game, closeup, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
