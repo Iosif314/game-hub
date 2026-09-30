@@ -1,9 +1,11 @@
 // Day structure, clock, equipment and maintenance tasks for the 5-day build.
-// Phases: dawn 05:00–08:00 (clock runs, maintenance) → day (paused for now) → dusk 18:00–19:00
-// (clock runs, light the lamp) → night (paused for now) → results → next dawn.
+// Phases: dawn (a fixed number of maintenance jobs) → day (paused for now) → dusk (light the lamp,
+// plus one job) → night (paused for now) → results → next dawn. The clock only moves when a job is done.
+
+export const DAWN_JOBS = 4;
+const DUSK_JOBS = 1;
 
 export const DAYS = 5;
-const TIME_SCALE = 0.75; // game minutes per real second while the clock runs
 const PHASE_NAMES = { dawn: "새벽", day: "낮", dusk: "해 질 녘", night: "밤", results: "밤" };
 
 export const TASKS = {
@@ -41,6 +43,7 @@ export function createGame(hooks) {
     minutes: 5 * 60,
     phase: "dawn",
     lampOn: true, // last night's light is still burning at 05:00
+    jobs: DAWN_JOBS,
     eq: { mantle: 55, bath: 45, lens: 50, wound: 0, pressure: 0, tank: 40 },
     drum: 300,
     spill: false,
@@ -50,7 +53,9 @@ export function createGame(hooks) {
 
   function enterDay() {
     g.phase = "day";
-    hooks.toast("아침이 되었다. 정비 시간이 끝났다");
+    g.minutes = Math.max(g.minutes, 8 * 60);
+    if (g.lampOn) g.lampOn = false;
+    hooks.toast("새벽 정비를 마쳤다");
   }
 
   function enterNight() {
@@ -118,9 +123,9 @@ export function createGame(hooks) {
       return `${g.day}일차 · ${PHASE_NAMES[g.phase]} ${hhmm(g.minutes)}`;
     },
     hint() {
-      if (g.phase === "dawn") return g.spill ? "08:00까지 정비 · 렌즈실 바닥에 수은이 흘러 있다" : "08:00까지 정비";
+      if (g.phase === "dawn") return `정비 ${g.jobs}/${DAWN_JOBS}회 남음 · N 정비 마치기${g.spill ? " · 렌즈실 바닥에 수은이 흘러 있다" : ""}`;
       if (g.phase === "day") return "N  해 질 녘으로 넘기기 (낮 활동은 다음 단계에서)";
-      if (g.phase === "dusk") return g.lampOn ? "N  밤으로 넘기기" : "19:00 전에 렌즈실에서 예열과 점화";
+      if (g.phase === "dusk") return g.lampOn ? `N  밤으로 넘기기${g.jobs ? ` · 정비 ${g.jobs}회 가능` : ""}` : "렌즈실에서 예열과 점화 · 켜지 않고 N을 누르면 등불 없는 밤";
       if (g.phase === "night") return "N  새벽으로 넘기기 (배 판단은 다음 단계에서)";
       return "";
     },
@@ -133,18 +138,12 @@ export function createGame(hooks) {
     get rotating() {
       return g.lampOn && g.eq.wound > 0;
     },
-    tick(dt) {
-      if (g.phase !== "dawn" && g.phase !== "dusk") return;
-      g.minutes += dt * TIME_SCALE;
-      api.checkClock();
-    },
     checkClock() {
       if (g.phase === "dawn" && g.lampOn && g.minutes >= 6 * 60) {
         g.lampOn = false;
         hooks.toast("해가 떠서 등불을 껐다");
       }
-      if (g.phase === "dawn" && g.minutes >= 8 * 60) enterDay();
-      if (g.phase === "dusk" && g.minutes >= 19 * 60) enterNight();
+      if (g.phase === "dawn" && g.jobs <= 0) enterDay();
     },
     stationTasks(station) {
       return (STATIONS[station] || []).filter((id) => id !== "spill" || g.spill);
@@ -154,6 +153,7 @@ export function createGame(hooks) {
       const t = TASKS[id];
       if (!t.phases.includes(g.phase)) return `${t.phases.map((p) => PHASE_NAMES[p]).join("·")}에만`;
       if (id === "ignite" && g.lampOn) return "이미 켜져 있음";
+      if (id !== "ignite" && g.jobs <= 0) return "오늘 정비 횟수를 다 썼음";
       if (id === "refuel" && g.drum <= 0) return "드럼이 비었음";
       return null;
     },
@@ -168,11 +168,7 @@ export function createGame(hooks) {
     complete(id, res) {
       const t = TASKS[id];
       const e = g.eq;
-      if (!res || res.cancelled) {
-        g.minutes += 5;
-        api.checkClock();
-        return;
-      }
+      if (!res || res.cancelled) return;
       if (id === "mantle" && res.ok) e.mantle = 100;
       if (id === "lens") e.lens = clamp(res.clarity);
       if (id === "pump") e.pressure = clamp(res.pressure);
@@ -192,14 +188,20 @@ export function createGame(hooks) {
         e.tank = clamp(e.tank + Math.min(used, res.added));
       }
       hooks.expose(t.exposure);
+      if (id !== "ignite") g.jobs--;
       g.minutes += t.minutes;
       g.done.push(`${hhmm(g.minutes)} ${t.name}`);
       api.checkClock();
     },
     skip() {
+      if (g.phase === "dawn") {
+        enterDay();
+        return null;
+      }
       if (g.phase === "day") {
         g.phase = "dusk";
         g.minutes = 18 * 60;
+        g.jobs = DUSK_JOBS;
         return null;
       }
       if (g.phase === "dusk") {
@@ -215,6 +217,7 @@ export function createGame(hooks) {
       g.minutes = 5 * 60;
       g.phase = "dawn";
       g.lampOn = n.lit && n.hoursLit >= 10;
+      g.jobs = DAWN_JOBS;
       g.done = [];
       g.night = null;
     },

@@ -227,9 +227,10 @@ function openMenu(station) {
   const rows = tasks.map((id, i) => {
     const t = TASKS[id];
     const why = game.blockedReason(id);
-    return `<div class="${why ? "off" : ""}">${i + 1}  ${t.name} · ${t.minutes}분${why ? `  (${why})` : ""}</div>`;
+    return `<div class="${why ? "off" : ""}">${i + 1}  ${t.name}${why ? `  (${why})` : ""}</div>`;
   });
-  menuEl.innerHTML = `<div class="menu-status">${game.status(station)}</div>${rows.join("")}<div class="menu-foot">번호로 선택 · E 닫기</div>`;
+  const left = game.state.phase === "dawn" || game.state.phase === "dusk" ? ` · 정비 ${game.state.jobs}회 남음` : "";
+  menuEl.innerHTML = `<div class="menu-status">${game.status(station)}${left}</div>${rows.join("")}<div class="menu-foot">번호로 선택 · E 닫기</div>`;
   menuEl.classList.remove("hidden");
 }
 function closeMenu() {
@@ -246,8 +247,8 @@ function chooseTask(i) {
   }
   closeMenu();
   if (id === "spill") {
-    game.complete("spill", {});
     toast("쏟아진 수은을 모았다");
+    game.complete("spill", {});
     return;
   }
   mode = "closeup";
@@ -255,8 +256,9 @@ function chooseTask(i) {
   promptEl.textContent = "";
   document.exitPointerLock();
   closeup.open(id, { mercury: () => mercury, eq: game.state.eq, drum: game.state.drum }, (res) => {
-    game.complete(id, res);
+    // toast first so a phase change announced by complete() is the message left on screen
     if (!res.cancelled) toast(`${TASKS[id].name} 완료`);
+    game.complete(id, res);
     showMenu("클릭해서 계속");
   });
 }
@@ -464,7 +466,6 @@ function frame() {
   if (closeup.active) {
     closeup.update(dt);
   } else {
-    if (mode === "play" && !menu) game.tick(dt);
     clockEl.textContent = game.clockText();
     hintEl.textContent = game.hint();
     before.copy(player.pos);
