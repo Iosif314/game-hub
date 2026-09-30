@@ -12,6 +12,8 @@ const STAIR_R0 = 2.6;
 const STAIR_R1 = 3.9;
 const STEPS = 20;
 const HOLE_START = (120 / 180) * Math.PI;
+// the inner handrail starts at the third step, so the lowest steps can still be stepped off sideways
+const RAIL_START = (3 * (Math.PI * 1.5)) / 20;
 const DOOR_A = (312 / 180) * Math.PI;
 const DOOR_HALF = (13 / 180) * Math.PI;
 const GALLERY_R = R + 1.5;
@@ -46,7 +48,8 @@ export function groundAt(x, z, y) {
   };
   if (r < R) {
     consider(0);
-    const inHole = r > STAIR_R0 - 0.2 && a >= HOLE_START && a <= STAIR_SPAN;
+    // collision hole matches the stair band, so anything that drops through lands on a step
+    const inHole = r > STAIR_R0 - 0.05 && a >= HOLE_START && a <= STAIR_SPAN;
     if (!inHole) consider(FLOOR_H);
   } else if (r <= GALLERY_R) {
     consider(FLOOR_H);
@@ -67,6 +70,8 @@ export function blocked(x, z, y) {
   }
   if (y < FLOOR_H - 0.6) {
     if (r > R - BODY || r < COLUMN_R + BODY) return true;
+    // inner handrail: once up the flight you can't step off its open side
+    if (y > 0.3 && r < STAIR_R0 + 0.05 && a >= RAIL_START && a <= STAIR_SPAN) return true;
     if (r >= STAIR_R0 - BODY && r <= STAIR_R1) {
       const t = stairTop(a);
       // walking under the flight: blocked where the steps would hit your head
@@ -74,6 +79,17 @@ export function blocked(x, z, y) {
     }
     return false;
   }
+  if (r < LENS_R) return true;
+  if (angDiff(a, DOOR_A) < DOOR_HALF - 0.04) return r > GALLERY_R - BODY;
+  if (r < R) return r > R - BODY;
+  return r < R + BODY || r > GALLERY_R - BODY;
+}
+
+// only the tower's shell and fixed fittings — used to let the player walk out if ever wedged
+export function hardBlocked(x, z, y) {
+  const r = Math.hypot(x, z);
+  const a = angleOf(x, z);
+  if (y < FLOOR_H - 0.6) return r > R - BODY || r < COLUMN_R + BODY;
   if (r < LENS_R) return true;
   if (angDiff(a, DOOR_A) < DOOR_HALF - 0.04) return r > GALLERY_R - BODY;
   if (r < R) return r > R - BODY;
@@ -197,6 +213,22 @@ export function buildWorld(scene) {
     s.position.copy(polar(a, (STAIR_R0 + STAIR_R1) / 2, ((i + 1) * FLOOR_H) / STEPS - 0.07));
     s.rotation.y = -a;
     scene.add(s);
+  }
+  // inner handrail following the flight, with a post every other step
+  const railR = STAIR_R0 + 0.04;
+  const railPts = [];
+  for (let i = 0; i <= 40; i++) {
+    const a = RAIL_START + ((STAIR_SPAN - RAIL_START) * i) / 40;
+    railPts.push(polar(a, railR, (a / STAIR_SPAN) * FLOOR_H + 0.9));
+  }
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x3a3632, roughness: 0.6, metalness: 0.3 });
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPts), 60, 0.025, 5), railMat));
+  for (let i = 3; i < STEPS; i += 2) {
+    const a = (i + 0.5) * (STAIR_SPAN / STEPS);
+    const top = ((i + 1) * FLOOR_H) / STEPS;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.9, 5), railMat);
+    post.position.copy(polar(a, railR, top + 0.45));
+    scene.add(post);
   }
 
   // lantern: low parapet with a gap for the gallery door, glazing bars, roof

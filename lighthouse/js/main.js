@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { buildWorld, animateWorld, setTimeOfDay, groundAt, blocked, zoneOf } from "./world.js";
+import { buildWorld, animateWorld, setTimeOfDay, groundAt, blocked, hardBlocked, zoneOf } from "./world.js";
 import { createGame, TASKS, DAYS } from "./game.js";
 import { createCloseup } from "./closeup.js";
 
@@ -406,6 +406,8 @@ function move(dt) {
     dz = (-Math.cos(player.yaw) * fwd - Math.sin(player.yaw) * side) * s;
   }
   const p = player.pos;
+  // if the player is somehow already inside a blocked spot, only the tower shell stops them, so they can walk out
+  const test = blocked(p.x, p.z, p.y) ? hardBlocked : blocked;
   // try each axis separately so walls slide instead of stopping dead
   for (const [ax, d] of [
     ["x", dx],
@@ -416,7 +418,7 @@ function move(dt) {
     const nz = ax === "z" ? p.z + d : p.z;
     const g = groundAt(nx, nz, p.y);
     const ny = Math.max(p.y, g);
-    if (g === -Infinity || blocked(nx, nz, ny)) continue;
+    if (g === -Infinity || test(nx, nz, ny)) continue;
     p.x = nx;
     p.z = nz;
   }
