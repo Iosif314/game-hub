@@ -159,16 +159,45 @@ export function logbook() {
   return g;
 }
 
-export function oilLamp() {
+// hurricane lantern: fuel fount, glass globe in a wire guard, side air tubes and a bail handle.
+// Origin is the bottom of the fount; userData.flameY is the flame height for the light that follows it.
+export function handLantern() {
   const g = new THREE.Group();
-  g.add(mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.08, 8), BRASS, 0, 0.04, 0));
-  g.add(mesh(new THREE.SphereGeometry(0.075, 8, 5), BRASS, 0, 0.12, 0));
-  const chimney = mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.18, 8, 1, true), glass(), 0, 0.27, 0);
-  chimney.userData.noShadow = true;
-  g.add(chimney);
-  const flame = mesh(new THREE.ConeGeometry(0.018, 0.06, 6), FLAME, 0, 0.23, 0);
+  const tin = std(0x3a3935, { roughness: 0.5, metalness: 0.5 });
+  g.add(mesh(new THREE.CylinderGeometry(0.075, 0.085, 0.06, 10), tin, 0, 0.03, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.05, 0.075, 0.02, 10), tin, 0, 0.07, 0));
+  const pts = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    pts.push(new THREE.Vector2(0.035 + Math.sin(Math.PI * t) * 0.035, 0.08 + t * 0.15));
+  }
+  const globe = new THREE.Mesh(new THREE.LatheGeometry(pts, 10), glass());
+  globe.userData.noShadow = true;
+  g.add(globe);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const at = (r, y) => new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+    g.add(rod(at(0.05, 0.08), at(0.078, 0.155), 0.003, tin, 3), rod(at(0.078, 0.155), at(0.05, 0.23), 0.003, tin, 3));
+  }
+  const guard = new THREE.Mesh(new THREE.TorusGeometry(0.078, 0.003, 3, 12), tin);
+  guard.rotation.x = Math.PI / 2;
+  guard.position.y = 0.155;
+  g.add(guard);
+  g.add(mesh(new THREE.CylinderGeometry(0.03, 0.055, 0.04, 10), tin, 0, 0.25, 0));
+  g.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.03, 8), tin, 0, 0.285, 0));
+  // side air tubes from the fount up to the cap
+  for (const x of [-0.085, 0.085]) {
+    g.add(rod(new THREE.Vector3(x, 0.06, 0), new THREE.Vector3(x, 0.25, 0), 0.006, tin, 4));
+    g.add(rod(new THREE.Vector3(x, 0.25, 0), new THREE.Vector3(x * 0.4, 0.27, 0), 0.006, tin, 4));
+  }
+  const bail = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.004, 3, 12, Math.PI), tin);
+  bail.position.y = 0.25;
+  g.add(bail);
+  const flame = mesh(new THREE.ConeGeometry(0.012, 0.045, 6), FLAME, 0, 0.14, 0);
   flame.userData.noShadow = true;
   g.add(flame);
+  g.userData.flameY = 0.14;
+  g.userData.handleY = 0.335;
   return g;
 }
 

@@ -25,6 +25,7 @@ const slider = $("mercury-slider");
 // and dithered to four greys ---
 const renderer = new THREE.WebGLRenderer({ canvas: view, antialias: false });
 renderer.setPixelRatio(1);
+renderer.autoClear = false;
 renderer.setSize(W, H, false);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.BasicShadowMap;
@@ -168,6 +169,7 @@ document.addEventListener("keydown", (e) => {
   if (mode !== "play") return;
   keys.add(e.code);
   if (e.code === "KeyE" && target) interact(target.userData.interact);
+  if (e.code === "KeyG" && holding) putDownLantern();
 });
 document.addEventListener("keyup", (e) => keys.delete(e.code));
 
@@ -198,6 +200,10 @@ function toast(text) {
 }
 
 function interact(info) {
+  if (info.id === "lantern") {
+    pickUpLantern();
+    return;
+  }
   if (info.id === "mantle") {
     mode = "closeup";
     keys.clear();
@@ -223,6 +229,82 @@ function findTarget() {
   if (!o) return null;
   const reach = o.userData.reach || REACH;
   return hit.distance <= reach ? o : null;
+}
+
+// --- the carried lantern: drawn in its own pass over the scene so it never clips into walls ---
+const heldScene = new THREE.Scene();
+heldScene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 0.35));
+const heldGlow = new THREE.PointLight(0xffffff, 0.25, 0.6, 2);
+heldScene.add(heldGlow);
+const heldCam = new THREE.PerspectiveCamera(70, W / H, 0.01, 10);
+const HOLD = new THREE.Vector3(0.36, -0.5, -0.72); // lantern base in camera space, hanging from the right hand
+let holding = false;
+let walkPhase = 0;
+const lanternFlame = new THREE.Vector3();
+
+function setLanternShadows(on) {
+  world.lantern.traverse((o) => {
+    if (o.isMesh && !o.userData.noShadow) o.castShadow = on;
+  });
+}
+
+function pickUpLantern() {
+  holding = true;
+  scene.remove(world.lantern);
+  heldScene.add(world.lantern);
+  world.lantern.position.copy(HOLD);
+  world.lantern.rotation.set(0, 0, 0);
+  const i = world.interactables.indexOf(world.lantern);
+  if (i >= 0) world.interactables.splice(i, 1);
+  setLanternShadows(false);
+  world.lanternLight.intensity = 2.2;
+  toast("랜턴을 들었다 · G로 내려놓기");
+}
+
+function putDownLantern() {
+  // on the flat surface under the crosshair if it's within reach, otherwise just in front of your feet
+  camera.position.set(player.pos.x, player.eyeY, player.pos.z);
+  camera.rotation.set(player.pitch, player.yaw, 0);
+  camera.updateMatrixWorld();
+  raycaster.setFromCamera(center, camera);
+  let spot = null;
+  const hit = raycaster.intersectObjects(world.solids, true)[0];
+  if (hit && hit.face) {
+    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+    if (Math.abs(n.y) > 0.7 && hit.point.y < camera.position.y - 0.3) spot = hit.point.clone();
+  }
+  if (!spot) {
+    const p = player.pos.clone().add(new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw)).multiplyScalar(0.5));
+    const g = groundAt(p.x, p.z, player.pos.y);
+    spot = blocked(p.x, p.z, player.pos.y) || g === -Infinity ? player.pos.clone() : new THREE.Vector3(p.x, g, p.z);
+  }
+  holding = false;
+  heldScene.remove(world.lantern);
+  scene.add(world.lantern);
+  world.lantern.position.copy(spot);
+  world.lantern.rotation.set(0, player.yaw, 0);
+  setLanternShadows(true);
+  world.lanternLight.intensity = 3.5;
+  world.interactables.push(world.lantern);
+  world.lanternLight.position.copy(spot).add(new THREE.Vector3(0, world.lantern.userData.flameY, 0));
+}
+
+// sway with each step, plus the mercury tremor in the hand (the only place the tremor shows in 3D)
+function updateHeldLantern(dt, t, moved) {
+  const L = world.lantern;
+  walkPhase += dt * (moved ? 7 : 0);
+  const shake = mercury / 100;
+  L.position.set(
+    HOLD.x + Math.sin(walkPhase) * 0.012 + (Math.sin(t * 13.1) * 0.6 + Math.sin(t * 7.7 + 1.3) * 0.4) * shake * 0.02,
+    HOLD.y + Math.abs(Math.cos(walkPhase)) * 0.01 + Math.sin(t * 11.3 + 0.7) * shake * 0.012,
+    HOLD.z,
+  );
+  L.rotation.z = Math.sin(walkPhase) * 0.06 + Math.sin(t * 9.1) * shake * 0.08;
+  L.rotation.x = Math.sin(t * 1.3) * 0.02;
+  lanternFlame.set(L.position.x, L.position.y + L.userData.flameY, L.position.z);
+  heldGlow.position.copy(lanternFlame);
+  camera.updateMatrixWorld();
+  world.lanternLight.position.copy(camera.localToWorld(lanternFlame.clone()));
 }
 
 // --- movement ---
@@ -306,13 +388,19 @@ function frame() {
 
     camera.position.set(player.pos.x, player.eyeY, player.pos.z);
     camera.rotation.set(player.pitch, player.yaw, 0);
+    if (holding) updateHeldLantern(dt, t, jumped > 0.0005);
     animateWorld(world, t);
 
     target = mode === "play" ? findTarget() : null;
     promptEl.textContent = target ? `E  ${target.userData.interact.label}` : "";
 
     renderer.setRenderTarget(rt);
+    renderer.clear();
     renderer.render(scene, camera);
+    if (holding) {
+      renderer.clearDepth();
+      renderer.render(heldScene, heldCam);
+    }
     renderer.setRenderTarget(null);
     renderer.render(postScene, postCam);
 
@@ -338,4 +426,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // dev hook for automated checks
-window.__lh = { player, world, interact, diag, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
+window.__lh = { player, world, interact, diag, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };

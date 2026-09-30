@@ -120,7 +120,7 @@ export function buildWorld(scene) {
 
   // lights: low dawn sun, soft fill, the desk lamp and the lighthouse lamp itself
   scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.18));
-  const sun = new THREE.DirectionalLight(0xfffcf6, 2.6);
+  const sun = new THREE.DirectionalLight(0xffffff, 2.6);
   sun.position.set(-60, 25, 40);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -129,10 +129,11 @@ export function buildWorld(scene) {
   sun.shadow.normalBias = 0.03;
   scene.add(sun);
   scene.add(sun.target);
-  const deskLamp = new THREE.PointLight(0xfff8ee, 6, 6, 2);
+  // lights stay pure white: the post pass treats warm, saturated pixels as flame
+  const deskLamp = new THREE.PointLight(0xffffff, 3.5, 6, 2);
   deskLamp.position.copy(polar(deg(318), 2.6, 1.6));
   scene.add(deskLamp);
-  const lensLamp = new THREE.PointLight(0xfff8ee, 8, 8, 2);
+  const lensLamp = new THREE.PointLight(0xffffff, 8, 8, 2);
   lensLamp.position.set(0, FLOOR_H + 1.3, 0);
   scene.add(lensLamp);
 
@@ -237,6 +238,7 @@ export function buildWorld(scene) {
   gallery.rotation.x = Math.PI / 2;
   gallery.position.y = FLOOR_H;
   scene.add(gallery);
+  solids.push(gallery);
   const rail = new THREE.Mesh(new THREE.TorusGeometry(GALLERY_R - 0.05, 0.03, 4, 64), iron);
   rail.rotation.x = Math.PI / 2;
   rail.position.y = FLOOR_H + 1.0;
@@ -337,15 +339,19 @@ export function buildWorld(scene) {
   book.userData.interact = { id: "logbook", label: "일지 읽기" };
   interactables.push(book);
   deskM.add(book);
-  const lamp = M.oilLamp();
-  lamp.position.set(-0.52, 0.8, -0.12);
-  deskM.add(lamp);
   const printer = M.tapePrinter();
   printer.position.set(0.38, 0.8, -0.08);
   printer.userData.interact = { id: "tape", label: "전신 테이프 읽기" };
   interactables.push(printer);
   deskM.add(printer);
-  deskLamp.position.copy(polar(deskA, 3.25)).add(new THREE.Vector3(0, 1.3, 0));
+  // the hand lantern starts on the desk; it lives directly in the scene so it can be picked up and moved
+  deskM.updateMatrixWorld(true);
+  const lantern = M.handLantern();
+  lantern.position.copy(deskM.localToWorld(new THREE.Vector3(-0.52, 0.8, -0.12)));
+  lantern.userData.interact = { id: "lantern", label: "랜턴 들기" };
+  scene.add(lantern);
+  interactables.push(lantern);
+  deskLamp.position.copy(lantern.position).add(new THREE.Vector3(0, lantern.userData.flameY, 0));
   place(M.chair(), polar(deskA, 2.45), faceCentre(deskA) + Math.PI, null, 0.3);
 
   const radioA = deg(334);
@@ -393,7 +399,7 @@ export function buildWorld(scene) {
   });
   sea.castShadow = false;
 
-  return { interactables, solids, animated, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
+  return { interactables, solids, animated, lantern, lanternLight: deskLamp, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
 }
 
 export function animateWorld(world, t) {
