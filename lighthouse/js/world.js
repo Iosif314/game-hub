@@ -1,0 +1,406 @@
+import * as THREE from "three";
+import { makeSprites } from "./sprites.js";
+import * as M from "./models.js";
+
+// Tower layout (world units ≈ metres). Floor 0 = radio room, floor 1 = lantern (lens room),
+// gallery = the outside ledge around the lantern. Angles are atan2(z, x) in [0, 2π).
+export const R = 4;
+export const FLOOR_H = 3.2;
+export const STEP_UP = 0.5;
+const STAIR_SPAN = Math.PI * 1.5;
+const STAIR_R0 = 2.6;
+const STAIR_R1 = 3.9;
+const STEPS = 20;
+const HOLE_START = (120 / 180) * Math.PI;
+const DOOR_A = (312 / 180) * Math.PI;
+const DOOR_HALF = (13 / 180) * Math.PI;
+const GALLERY_R = R + 1.5;
+const LENS_R = 0.9;
+const COLUMN_R = 0.5;
+const BODY = 0.35;
+const SEA_Y = -12;
+
+// furniture footprints (circles), filled in by buildWorld
+const OBSTACLES = [];
+
+const TAU = Math.PI * 2;
+const angleOf = (x, z) => {
+  const a = Math.atan2(z, x);
+  return a < 0 ? a + TAU : a;
+};
+const angDiff = (a, b) => Math.abs(((a - b + Math.PI * 3) % TAU) - Math.PI);
+
+function stairTop(a) {
+  if (a < 0 || a > STAIR_SPAN) return null;
+  const i = Math.min(STEPS - 1, Math.floor(a / (STAIR_SPAN / STEPS)));
+  return ((i + 1) * FLOOR_H) / STEPS;
+}
+
+// Highest walkable surface under (x, z) that the player can reach from height y
+export function groundAt(x, z, y) {
+  const r = Math.hypot(x, z);
+  const a = angleOf(x, z);
+  let best = -Infinity;
+  const consider = (h) => {
+    if (h <= y + STEP_UP && h > best) best = h;
+  };
+  if (r < R) {
+    consider(0);
+    const inHole = r > STAIR_R0 - 0.2 && a >= HOLE_START && a <= STAIR_SPAN;
+    if (!inHole) consider(FLOOR_H);
+  } else if (r <= GALLERY_R) {
+    consider(FLOOR_H);
+  }
+  if (r >= STAIR_R0 && r <= STAIR_R1) {
+    const t = stairTop(a);
+    if (t !== null) consider(t);
+  }
+  return best;
+}
+
+export function blocked(x, z, y) {
+  const r = Math.hypot(x, z);
+  const a = angleOf(x, z);
+  const upper = y >= FLOOR_H - 0.6;
+  for (const o of OBSTACLES) {
+    if (o.upper === upper && Math.hypot(x - o.x, z - o.z) < o.r + BODY * 0.7) return true;
+  }
+  if (y < FLOOR_H - 0.6) {
+    if (r > R - BODY || r < COLUMN_R + BODY) return true;
+    if (r >= STAIR_R0 - BODY && r <= STAIR_R1) {
+      const t = stairTop(a);
+      // walking under the flight: blocked where the steps would hit your head
+      if (t !== null && t > y + STEP_UP && t < y + 2.0) return true;
+    }
+    return false;
+  }
+  if (r < LENS_R) return true;
+  if (angDiff(a, DOOR_A) < DOOR_HALF - 0.04) return r > GALLERY_R - BODY;
+  if (r < R) return r > R - BODY;
+  return r < R + BODY || r > GALLERY_R - BODY;
+}
+
+export function zoneOf(pos) {
+  const r = Math.hypot(pos.x, pos.z);
+  if (pos.y < FLOOR_H - 0.6) return pos.y > 0.3 ? "stairs" : "radio";
+  return r < R ? "lantern" : "gallery";
+}
+
+function onWall(mesh, a, y, r = R - 0.02) {
+  mesh.position.set(r * Math.cos(a), y, r * Math.sin(a));
+  mesh.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a));
+  return mesh;
+}
+
+const polar = (a, r, y = 0) => new THREE.Vector3(r * Math.cos(a), y, r * Math.sin(a));
+const xz = (v) => ({ x: v.x, z: v.z });
+const deg = (d) => (d / 180) * Math.PI;
+
+export function buildWorld(scene) {
+  const sp = makeSprites();
+  const interactables = [];
+  const animated = {};
+  const solids = [];
+
+  // sky and fog
+  scene.background = new THREE.Color(0x8d8a84);
+  scene.fog = new THREE.Fog(0x8d8a84, 30, 260);
+  const skyGeo = new THREE.SphereGeometry(500, 24, 12);
+  const skyCols = [];
+  const sp0 = skyGeo.attributes.position;
+  for (let i = 0; i < sp0.count; i++) {
+    const t = Math.max(0, sp0.getY(i) / 500);
+    const v = 0.62 - t * 0.35;
+    skyCols.push(v, v, v * 0.97);
+  }
+  skyGeo.setAttribute("color", new THREE.Float32BufferAttribute(skyCols, 3));
+  const sky = new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false }));
+  sky.userData.noShadow = true;
+  scene.add(sky);
+
+  // lights: low dawn sun, soft fill, the desk lamp and the lighthouse lamp itself
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.18));
+  const sun = new THREE.DirectionalLight(0xfffcf6, 2.6);
+  sun.position.set(-60, 25, 40);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 200 });
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.03;
+  scene.add(sun);
+  scene.add(sun.target);
+  const deskLamp = new THREE.PointLight(0xfff8ee, 6, 6, 2);
+  deskLamp.position.copy(polar(deg(318), 2.6, 1.6));
+  scene.add(deskLamp);
+  const lensLamp = new THREE.PointLight(0xfff8ee, 8, 8, 2);
+  lensLamp.position.set(0, FLOOR_H + 1.3, 0);
+  scene.add(lensLamp);
+
+  const planks = new THREE.MeshStandardMaterial({ map: sp.planks, side: THREE.DoubleSide });
+  sp.planks.repeat.set(4, 4);
+  const stoneTex = sp.stone.clone();
+  stoneTex.needsUpdate = true;
+  stoneTex.repeat.set(12, 2);
+  const stoneIn = new THREE.MeshStandardMaterial({ map: stoneTex, side: THREE.BackSide });
+  const iron = new THREE.MeshStandardMaterial({ color: 0x3a3a3a });
+  const paint = new THREE.MeshStandardMaterial({ color: 0xd8d4c8 });
+
+  // floor 0
+  const f0 = new THREE.Mesh(new THREE.RingGeometry(0, R, 48, 8), planks);
+  f0.rotation.x = -Math.PI / 2;
+  scene.add(f0);
+  solids.push(f0);
+  // floor 1 with the stair opening cut out (rotated +90° so geometry angle == world angle)
+  const f1a = new THREE.Mesh(new THREE.RingGeometry(0, STAIR_R0 - 0.2, 32, 5), planks);
+  const f1b = new THREE.Mesh(
+    new THREE.RingGeometry(STAIR_R0 - 0.2, R, 48, 3, STAIR_SPAN, TAU - (STAIR_SPAN - HOLE_START)),
+    planks,
+  );
+  for (const m of [f1a, f1b]) {
+    m.rotation.x = Math.PI / 2;
+    m.position.y = FLOOR_H;
+    scene.add(m);
+    solids.push(m);
+  }
+
+  // radio-room walls and the tower's outer shell down to the sea
+  const wall0 = new THREE.Mesh(new THREE.CylinderGeometry(R, R, FLOOR_H, 64, 8, true), stoneIn);
+  wall0.position.y = FLOOR_H / 2;
+  scene.add(wall0);
+  solids.push(wall0);
+  const shellH = FLOOR_H - SEA_Y;
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.25, R + 1.2, shellH, 40, 10, true), paint);
+  shell.position.y = SEA_Y + shellH / 2;
+  scene.add(shell);
+
+  // central tube the clockwork weight runs down
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(COLUMN_R, COLUMN_R, FLOOR_H, 16), iron);
+  column.position.y = FLOOR_H / 2;
+  scene.add(column);
+  solids.push(column);
+
+  // spiral stairs
+  const stepGeo = new THREE.BoxGeometry(STAIR_R1 - STAIR_R0, 0.14, 0.72);
+  const stepMat = new THREE.MeshStandardMaterial({ color: 0x8a8274, roughness: 0.8 });
+  for (let i = 0; i < STEPS; i++) {
+    const a = (i + 0.5) * (STAIR_SPAN / STEPS);
+    const s = new THREE.Mesh(stepGeo, stepMat);
+    s.position.copy(polar(a, (STAIR_R0 + STAIR_R1) / 2, ((i + 1) * FLOOR_H) / STEPS - 0.07));
+    s.rotation.y = -a;
+    scene.add(s);
+  }
+
+  // lantern: low parapet with a gap for the gallery door, glazing bars, roof
+  const doorTheta = Math.PI / 2 - DOOR_A;
+  const parapet = new THREE.Mesh(
+    new THREE.CylinderGeometry(R, R, 1.0, 48, 3, true, doorTheta + DOOR_HALF, TAU - DOOR_HALF * 2),
+    new THREE.MeshStandardMaterial({ color: 0x5b5750, side: THREE.DoubleSide }),
+  );
+  parapet.position.y = FLOOR_H + 0.5;
+  scene.add(parapet);
+  solids.push(parapet);
+  const barGeo = new THREE.BoxGeometry(0.08, 2.6, 0.08);
+  for (let i = 0; i < 18; i++) {
+    const a = (i / 18) * TAU;
+    if (angDiff(a, DOOR_A) < DOOR_HALF) continue;
+    const b = new THREE.Mesh(barGeo, iron);
+    b.position.copy(polar(a, R, FLOOR_H + 1.3));
+    scene.add(b);
+  }
+  for (const a of [DOOR_A - DOOR_HALF, DOOR_A + DOOR_HALF]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.6, 0.14), iron);
+    b.position.copy(polar(a, R, FLOOR_H + 1.3));
+    scene.add(b);
+  }
+  const band = new THREE.Mesh(
+    new THREE.CylinderGeometry(R + 0.05, R + 0.05, 0.3, 48, 1, true),
+    new THREE.MeshStandardMaterial({ color: 0x2c2b2a, side: THREE.DoubleSide }),
+  );
+  band.position.y = FLOOR_H + 2.75;
+  scene.add(band);
+  const ceiling = new THREE.Mesh(
+    new THREE.CircleGeometry(R + 0.05, 48),
+    new THREE.MeshStandardMaterial({ color: 0x3a3836, side: THREE.DoubleSide }),
+  );
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.y = FLOOR_H + 2.9;
+  scene.add(ceiling);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(R + 0.5, 2.0, 32), new THREE.MeshStandardMaterial({ color: 0x2c2b2a }));
+  roof.position.y = FLOOR_H + 3.9;
+  scene.add(roof);
+
+  // gallery ledge and railing
+  const gallery = new THREE.Mesh(
+    new THREE.RingGeometry(R, GALLERY_R, 48, 3),
+    new THREE.MeshStandardMaterial({ color: 0x55524c, side: THREE.DoubleSide }),
+  );
+  gallery.rotation.x = Math.PI / 2;
+  gallery.position.y = FLOOR_H;
+  scene.add(gallery);
+  const rail = new THREE.Mesh(new THREE.TorusGeometry(GALLERY_R - 0.05, 0.03, 4, 64), iron);
+  rail.rotation.x = Math.PI / 2;
+  rail.position.y = FLOOR_H + 1.0;
+  scene.add(rail);
+  const postGeo = new THREE.BoxGeometry(0.05, 1.0, 0.05);
+  for (let i = 0; i < 28; i++) {
+    const p = new THREE.Mesh(postGeo, iron);
+    p.position.copy(polar((i / 28) * TAU, GALLERY_R - 0.05, FLOOR_H + 0.5));
+    scene.add(p);
+  }
+
+  // rocks and sea
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x4a4744, flatShading: true });
+  const rocks = [
+    [0, 7, 3],
+    [deg(70), 9, 2.2],
+    [deg(150), 8, 2.8],
+    [deg(230), 10, 2],
+    [deg(300), 8, 2.5],
+    [deg(40), 26, 1.6],
+    [deg(200), 30, 2],
+  ];
+  for (const [a, r, s] of rocks) {
+    const rk = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), rockMat);
+    rk.position.copy(polar(a, r, SEA_Y + s * 0.3));
+    rk.rotation.set(a, a * 2, 0);
+    scene.add(rk);
+  }
+  const seaGeo = new THREE.PlaneGeometry(700, 700, 110, 110);
+  seaGeo.rotateX(-Math.PI / 2);
+  // waves are displaced in the vertex shader; flat shading derives facet normals from the displaced positions
+  const seaMat = new THREE.MeshStandardMaterial({ color: 0x4a4947, flatShading: true, roughness: 0.35 });
+  const seaTime = { value: 0 };
+  seaMat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = seaTime;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform float uTime;")
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+        transformed.y += sin(position.x * 0.07 + uTime * 0.9) * 1.1
+          + sin(position.z * 0.11 - uTime * 1.3) * 0.8
+          + sin((position.x + position.z) * 0.23 + uTime * 1.7) * 0.45;`,
+      );
+  };
+  const sea = new THREE.Mesh(seaGeo, seaMat);
+  sea.position.y = SEA_Y;
+  scene.add(sea);
+  animated.seaTime = seaTime;
+
+  // rotating beam
+  const beam = new THREE.Group();
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    fog: false,
+  });
+  for (const dir of [1, -1]) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(6, 90, 16, 1, true), beamMat);
+    cone.userData.noShadow = true;
+    cone.rotation.z = (dir * Math.PI) / 2;
+    cone.position.x = -dir * 45;
+    beam.add(cone);
+  }
+  beam.position.y = FLOOR_H + 1.35;
+  scene.add(beam);
+  animated.beam = beam;
+
+  // --- objects (low-poly models) ---
+  const faceCentre = (a) => Math.atan2(-Math.cos(a), -Math.sin(a));
+  const place = (obj, pos, rotY, info, obstacle) => {
+    obj.position.copy(pos);
+    obj.rotation.y = rotY;
+    scene.add(obj);
+    if (info) {
+      obj.userData.interact = info;
+      interactables.push(obj);
+    }
+    if (obstacle) OBSTACLES.push({ x: pos.x, z: pos.z, r: obstacle, upper: pos.y > FLOOR_H - 0.6 });
+    return obj;
+  };
+
+  // radio room: desk with the logbook, lamp and telegraph printer; chair; the wireless on the wall
+  const deskA = deg(318);
+  const deskM = place(M.desk(), polar(deskA, 3.25), faceCentre(deskA));
+  solids.push(deskM);
+  OBSTACLES.push(
+    { ...xz(polar(deskA - deg(9), 3.25)), r: 0.42, upper: false },
+    { ...xz(polar(deskA + deg(9), 3.25)), r: 0.42, upper: false },
+  );
+  const book = M.logbook();
+  book.position.set(-0.15, 0.8, 0.05);
+  book.rotation.y = 0.15;
+  book.userData.interact = { id: "logbook", label: "일지 읽기" };
+  interactables.push(book);
+  deskM.add(book);
+  const lamp = M.oilLamp();
+  lamp.position.set(-0.52, 0.8, -0.12);
+  deskM.add(lamp);
+  const printer = M.tapePrinter();
+  printer.position.set(0.38, 0.8, -0.08);
+  printer.userData.interact = { id: "tape", label: "전신 테이프 읽기" };
+  interactables.push(printer);
+  deskM.add(printer);
+  deskLamp.position.copy(polar(deskA, 3.25)).add(new THREE.Vector3(0, 1.3, 0));
+  place(M.chair(), polar(deskA, 2.45), faceCentre(deskA) + Math.PI, null, 0.3);
+
+  const radioA = deg(334);
+  const radio = place(M.radioSet(sp.radio), polar(radioA, R - 0.16, 1.45), faceCentre(radioA), { id: "radio", label: "무전기 듣기" });
+  solids.push(radio);
+
+  for (const [a, y] of [
+    [deg(355), 1.7],
+    [deg(160), 1.7],
+    [deg(60), 1.7],
+  ]) {
+    const w = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.55, 0.85),
+      new THREE.MeshBasicMaterial({ map: sp.window, transparent: true, alphaTest: 0.5 }),
+    );
+    onWall(w, a, y);
+    scene.add(w);
+  }
+  place(M.oilDrum(), polar(deg(290), 3.3), 0.3, { id: "drum", label: "석유 보충" }, 0.32);
+  place(M.oilDrum(), polar(deg(282), 3.35), 1.1, null, 0.32);
+  const person = place(M.survivor(), polar(deg(215), 1.7), faceCentre(deg(215)) + 0.6, { id: "survivor", label: "생존자와 대화" }, 0.3);
+  animated.survivor = person;
+
+  // lantern
+  const lens = place(M.lensAssembly(), new THREE.Vector3(0, FLOOR_H, 0), 0, { id: "mantle", label: "맨틀 교체" });
+  lens.userData.reach = 2.2;
+  lensLamp.position.set(0, FLOOR_H + 1.76, 0);
+  place(M.filterKit(), polar(deg(20), 3.3, FLOOR_H), 0.8, { id: "filter", label: "수은 욕조 거르기" }, 0.28);
+
+  // gallery
+  const scopeA = deg(10);
+  place(M.telescope(), polar(scopeA, R + 1.0, FLOOR_H), Math.PI - scopeA, { id: "telescope", label: "망원경 보기" }, 0.3);
+
+  // a ship far out at sea
+  const shipM = M.ship();
+  shipM.position.set(-150, SEA_Y + 0.2, -180);
+  scene.add(shipM);
+  animated.ship = shipM;
+
+  // everything solid casts and receives the sun's shadow; sky, beam, glass and flames are left out
+  scene.traverse((o) => {
+    if (!o.isMesh || o.userData.noShadow) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+  });
+  sea.castShadow = false;
+
+  return { interactables, solids, animated, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
+}
+
+export function animateWorld(world, t) {
+  const { seaTime, beam, ship, survivor } = world.animated;
+  seaTime.value = t;
+  beam.rotation.y = -t * 0.5;
+  ship.position.x = -150 + ((t * 1.2) % 300);
+  // slow breathing
+  survivor.userData.torso.scale.set(1 + Math.sin(t * 1.6) * 0.015, 1, 1 + Math.sin(t * 1.6) * 0.02);
+}

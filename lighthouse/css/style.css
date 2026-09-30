@@ -1,0 +1,85 @@
+:root {
+  --ink: #0e0d0f;
+  --paper: #ccc7b8;
+  --glow: #fff7db;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: "Galmuri11", monospace;
+  overflow: hidden;
+}
+body { display: flex; align-items: center; justify-content: center; }
+#stage {
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+}
+#view, #closeup {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  display: block;
+}
+.hidden { display: none !important; }
+
+#crosshair {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 4px; height: 4px;
+  margin: -2px 0 0 -2px;
+  background: var(--paper);
+  mix-blend-mode: difference;
+}
+#prompt, #toast, #closeup-help {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  background: rgba(14, 13, 15, 0.85);
+  border: 1px solid var(--paper);
+  font-size: clamp(12px, 1.6vw, 18px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+#prompt { top: 58%; }
+#prompt:empty, #toast:empty { display: none; }
+#toast { bottom: 8%; }
+#closeup-help { bottom: 5%; text-align: center; white-space: pre-line; }
+#closeup:not(.hidden) ~ #crosshair { display: none; }
+
+#debug {
+  position: absolute;
+  top: 8px; left: 8px;
+  padding: 8px 10px;
+  background: rgba(14, 13, 15, 0.85);
+  border: 1px solid var(--paper);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre;
+}
+#debug input { vertical-align: middle; width: 120px; }
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(14, 13, 15, 0.8);
+  cursor: pointer;
+}
+#overlay h1 { font-family: "Galmuri14", "Galmuri11", monospace; font-weight: 400; font-size: clamp(32px, 6vw, 64px); margin: 0; color: var(--glow); }
+#overlay .sub { font-size: 14px; }
+#overlay .keys { border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+#overlay .keys td { padding: 3px 12px; }
+#overlay .keys td:first-child { text-align: right; opacity: 0.7; }
+#overlay .hint { margin-top: 12px; font-size: 16px; animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }

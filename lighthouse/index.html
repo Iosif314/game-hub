@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>등대의 밤 · 기술 시험판</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.39.3/dist/galmuri.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <canvas id="closeup" class="hidden"></canvas>
+
+    <div id="crosshair"></div>
+    <div id="prompt"></div>
+    <div id="toast"></div>
+    <div id="closeup-help" class="hidden"></div>
+
+    <div id="debug" class="hidden">
+      <div id="debug-text"></div>
+      <label>수은 <input id="mercury-slider" type="range" min="0" max="100" value="0" /></label>
+    </div>
+
+    <div id="overlay">
+      <h1>등대의 밤</h1>
+      <div class="sub">기술 시험판</div>
+      <table class="keys">
+        <tr><td>이동</td><td>W A S D</td></tr>
+        <tr><td>시점</td><td>마우스</td></tr>
+        <tr><td>상호작용</td><td>E</td></tr>
+        <tr><td>디버그 창</td><td>Tab</td></tr>
+      </table>
+      <div class="hint" id="overlay-hint">클릭해서 시작</div>
+    </div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
