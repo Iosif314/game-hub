@@ -352,8 +352,9 @@ export function buildWorld(scene) {
       varying vec3 vV;
       varying float vAlong;
       void main() {
-        float core = pow(abs(dot(normalize(vN), normalize(vV))), 2.5);
-        float fade = pow(1.0 - vAlong, 1.6);
+        // brightest through the middle, but never fully dark at the outline (that read as a seam)
+        float core = 0.35 + 0.65 * pow(abs(dot(normalize(vN), normalize(vV))), 2.0);
+        float fade = pow(1.0 - vAlong, 2.6);
         gl_FragColor = vec4(vec3(1.0, 0.98, 0.94), strength * core * fade);
       }`,
     transparent: true,
@@ -363,13 +364,13 @@ export function buildWorld(scene) {
   });
   for (const dir of [1, -1]) {
     // narrow (lens-sized) at the lantern, widening out to sea
-    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 6, 90, 16, 1, true), beamMat);
+    const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 24, 120, 24, 1, true), beamMat);
     cone.userData.noShadow = true;
     cone.rotation.z = (dir * Math.PI) / 2;
-    cone.position.x = dir * 45;
+    cone.position.x = dir * 60;
     beam.add(cone);
     // the beam actually lights what it sweeps over, so dark-running ships show for a moment
-    const spot = new THREE.SpotLight(0xffffff, 0, 400, 0.07, 0.5, 1);
+    const spot = new THREE.SpotLight(0xffffff, 0, 400, 0.2, 1, 1); // fully soft edge: no ring on the water
     spot.target.position.set(dir * 100, -15, 0);
     beam.add(spot, spot.target);
     beamSpots.push(spot);
@@ -462,14 +463,7 @@ export function buildWorld(scene) {
   const lens = place(M.lensAssembly(), new THREE.Vector3(0, FLOOR_H, 0), 0, { id: "lens", label: "렌즈 작업" });
   lens.userData.reach = 2.2;
   lensLamp.position.set(0, FLOOR_H + 1.76, 0);
-  // a soft halo round the flame, and a wider haze in the night air that swells as the beam sweeps past you
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-  halo.position.set(0, FLOOR_H + 1.76, 0);
-  halo.scale.setScalar(2.2);
-  scene.add(halo);
-  const glowHaze = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
-  glowHaze.position.copy(halo.position);
-  scene.add(glowHaze);
+
   place(M.filterKit(), polar(deg(20), 3.3, FLOOR_H), 0.8, { id: "filter", label: "수은 욕조 거르기" }, 0.28);
 
   // gallery
@@ -520,8 +514,6 @@ export function buildWorld(scene) {
     lensLamp,
     flame: lens.userData.flame,
     glass: lens.userData.glass,
-    halo,
-    glowHaze,
     time: 0,
     beam,
     beamMat,
@@ -594,9 +586,6 @@ export function setTimeOfDay(world, hours, lampOn, rotating, dt, shutter = false
     flash = smooth(0.93, 0.995, align) * (1 - dayF * 0.7);
   }
   e.glass.emissiveIntensity = lampOn ? (0.35 + 0.9 * flash) * flick : 0;
-  e.halo.material.opacity = lampOn ? (0.55 + 0.45 * flash) * flick : 0;
-  e.glowHaze.material.opacity = lampOn ? (0.1 + 0.55 * flash) * (1 - dayF) : 0;
-  e.glowHaze.scale.setScalar(7 + 12 * flash);
   // the shutter blocks the light from reaching the sea; the flame keeps burning behind it
   e.beam.visible = lampOn && !shutter;
   for (const s of e.beamSpots) s.intensity = lampOn && !shutter ? 900 * (1 - dayF) : 0;
@@ -624,23 +613,4 @@ export function addSurvivorModel(world, scene, index, info) {
   world.interactables.push(p);
   world.survivorModels.push(p);
   OBSTACLES.push({ x: p.position.x, z: p.position.z, r: 0.3, upper: false });
-}
-
-// warm radial glow used for the lamp's halo
-let glowTex = null;
-function glowTexture() {
-  if (glowTex) return glowTex;
-  const c = document.createElement("canvas");
-  c.width = c.height = 64;
-  const g = c.getContext("2d");
-  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  grad.addColorStop(0, "rgba(255,200,120,1)");
-  grad.addColorStop(0.25, "rgba(255,160,70,0.55)");
-  grad.addColorStop(0.6, "rgba(255,130,50,0.12)");
-  grad.addColorStop(1, "rgba(255,120,40,0)");
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 64, 64);
-  glowTex = new THREE.CanvasTexture(c);
-  glowTex.colorSpace = THREE.SRGBColorSpace;
-  return glowTex;
 }
