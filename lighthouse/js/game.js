@@ -211,11 +211,11 @@ export function createGame(hooks) {
       if (g.phase === "day") {
         const todo = [];
         if (!g.today.radio) todo.push("무전을 들을 수 있다");
-        if (api.supplyWaiting) todo.push("보급선이 왔다 · 무전실의 상자 확인");
+        if (api.supplyWaiting) todo.push("보급선이 왔다 · 1층 창고의 상자 확인");
         return `${todo.length ? todo.join(" · ") + " · " : ""}N 해 질 녘으로`;
       }
       if (g.phase === "dusk") return g.lampOn ? `N  일정 마치기${g.jobs ? ` · 정비 ${g.jobs}회 가능` : ""}` : "렌즈실에서 예열과 점화 · 켜지 않고 N을 누르면 등불 없는 밤";
-      if (g.phase === "wire") return g.today.tape ? "N  밤으로 넘기기 (배 판단은 다음 단계에서)" : "전신이 왔다 · 무전실 전신기에서 테이프 읽기 · N 밤으로";
+      if (g.phase === "wire") return g.today.tape ? "N  밤으로 넘기기 (배 판단은 다음 단계에서)" : "전신이 왔다 · 무전실(3층) 전신기에서 테이프 읽기 · N 밤으로";
       if (g.phase === "night") return hooks.nightHint ? hooks.nightHint() : "";
       return "";
     },

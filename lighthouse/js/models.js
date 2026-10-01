@@ -340,3 +340,120 @@ export function supplyBoat() {
   g.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 3, 5), WOOD, 1.8, 2.3, 0));
   return g;
 }
+
+// --- living quarters and storage ---
+
+export function bunk() {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.BoxGeometry(2.0, 0.08, 0.9), WOOD, 0, 0.45, 0));
+  g.add(mesh(new THREE.BoxGeometry(1.9, 0.14, 0.82), std(0x77736b, { roughness: 1 }), 0, 0.55, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.5, 0.12, 0.6), std(0x9b968a, { roughness: 1 }), -0.7, 0.66, 0));
+  g.add(mesh(new THREE.BoxGeometry(1.1, 0.06, 0.84), std(0x4b4843, { roughness: 1 }), 0.35, 0.64, 0));
+  for (const [x, z] of [
+    [-0.95, -0.4],
+    [0.95, -0.4],
+    [-0.95, 0.4],
+    [0.95, 0.4],
+  ]) {
+    g.add(mesh(new THREE.BoxGeometry(0.07, 0.5, 0.07), WOOD, x, 0.25, z));
+  }
+  g.add(mesh(new THREE.BoxGeometry(0.07, 0.4, 0.86), WOOD, -1.0, 0.7, 0));
+  return g;
+}
+
+// cast-iron stove with its flue going up through the ceiling
+export function stove() {
+  const g = new THREE.Group();
+  const cast = std(0x2a2928, { roughness: 0.6, metalness: 0.4 });
+  g.add(mesh(new THREE.BoxGeometry(0.7, 0.7, 0.55), cast, 0, 0.35, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.74, 0.04, 0.6), cast, 0, 0.72, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.3, 0.2, 0.02), std(0x111111), 0, 0.35, 0.28));
+  g.add(mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.4, 8), cast, 0.15, 1.9, -0.1));
+  g.add(mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.18, 8), std(0x5d5a55, { metalness: 0.5, roughness: 0.4 }), -0.15, 0.83, 0.05));
+  return g;
+}
+
+export function table() {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.BoxGeometry(0.9, 0.05, 0.7), WOOD, 0, 0.75, 0));
+  for (const [x, z] of [
+    [-0.4, -0.3],
+    [0.4, -0.3],
+    [-0.4, 0.3],
+    [0.4, 0.3],
+  ]) {
+    g.add(mesh(new THREE.BoxGeometry(0.05, 0.74, 0.05), WOOD, x, 0.37, z));
+  }
+  g.add(mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.1, 8), std(0x8a857a), 0.2, 0.82, 0.1));
+  g.add(mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.02, 10), std(0xb5b0a4), -0.15, 0.785, -0.05));
+  return g;
+}
+
+// small mirror on the wall: where the keeper checks his gums
+export function mirror() {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.BoxGeometry(0.42, 0.56, 0.03), WOOD, 0, 0, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.34, 0.48, 0.01), std(0xd6d6d6, { metalness: 0.9, roughness: 0.08 }), 0, 0, 0.02));
+  return g;
+}
+
+export function foodSacks() {
+  const g = new THREE.Group();
+  const sack = std(0x8a7f6a, { roughness: 1 });
+  for (const [x, z, s] of [
+    [0, 0, 1],
+    [0.45, 0.1, 0.9],
+    [0.2, -0.35, 0.85],
+  ]) {
+    const m = mesh(new THREE.SphereGeometry(0.28 * s, 7, 5), sack, x, 0.24 * s, z);
+    m.scale.set(1, 0.85, 0.8);
+    g.add(m);
+  }
+  g.add(mesh(new THREE.BoxGeometry(0.4, 0.3, 0.3), WOOD, -0.45, 0.15, 0.1));
+  return g;
+}
+
+export function shelf() {
+  const g = new THREE.Group();
+  for (const y of [0.05, 0.6, 1.15, 1.7]) g.add(mesh(new THREE.BoxGeometry(1.2, 0.04, 0.35), WOOD, 0, y, 0));
+  for (const x of [-0.58, 0.58]) g.add(mesh(new THREE.BoxGeometry(0.04, 1.75, 0.35), WOOD, x, 0.87, 0));
+  const tin = std(0x6c6a64, { metalness: 0.5, roughness: 0.5 });
+  for (let i = 0; i < 6; i++) {
+    g.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.14, 8), tin, -0.4 + (i % 3) * 0.3, 0.7 + Math.floor(i / 3) * 0.55, 0));
+  }
+  g.add(mesh(new THREE.BoxGeometry(0.3, 0.2, 0.25), std(0x5a5246), 0.3, 1.27, 0));
+  return g;
+}
+
+// the rotation clockwork: a frame of gears with a winding crank; its weight cable runs into the central tube
+export function clockwork() {
+  const g = new THREE.Group();
+  const cast = std(0x2e2d2b, { roughness: 0.5, metalness: 0.5 });
+  const brass = BRASS;
+  g.add(mesh(new THREE.BoxGeometry(1.1, 0.06, 0.7), cast, 0, 1.0, 0));
+  for (const [x, z] of [
+    [-0.5, -0.3],
+    [0.5, -0.3],
+    [-0.5, 0.3],
+    [0.5, 0.3],
+  ]) {
+    g.add(mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), cast, x, 0.5, z));
+  }
+  for (const [x, y, r] of [
+    [-0.2, 1.35, 0.28],
+    [0.25, 1.28, 0.2],
+    [0.05, 1.62, 0.14],
+  ]) {
+    const gear = mesh(new THREE.CylinderGeometry(r, r, 0.05, 12), brass, x, y, 0);
+    gear.rotation.x = Math.PI / 2;
+    g.add(gear);
+  }
+  const drum = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.5, 10), cast, 0, 0.7, 0);
+  drum.rotation.z = Math.PI / 2;
+  g.add(drum);
+  // crank on the front
+  g.add(rod(new THREE.Vector3(0.3, 0.7, 0.35), new THREE.Vector3(0.3, 0.7, 0.55), 0.02, cast, 5));
+  g.add(rod(new THREE.Vector3(0.3, 0.7, 0.55), new THREE.Vector3(0.3, 0.45, 0.55), 0.02, cast, 5));
+  g.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 6), WOOD, 0.3, 0.45, 0.62));
+  return g;
+}

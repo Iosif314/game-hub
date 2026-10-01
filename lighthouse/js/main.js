@@ -117,10 +117,7 @@ scene.traverse((o) => {
 
 // --- player ---
 const player = { pos: world.spawn.clone(), vy: 0, yaw: 0, pitch: 0, eyeY: world.spawn.y + EYE };
-{
-  const desk = new THREE.Vector3(3.2 * Math.cos((318 / 180) * Math.PI), 0, 3.2 * Math.sin((318 / 180) * Math.PI));
-  player.yaw = Math.atan2(-(desk.x - player.pos.x), -(desk.z - player.pos.z));
-}
+player.yaw = world.spawnYaw;
 let mercury = 0;
 
 const keys = new Set();
@@ -475,7 +472,7 @@ const night = createNight(scene, {
 let nightDay = 0;
 
 function nightHint() {
-  if (game.knock) return "누군가 등대 문을 두드린다 · 무전실 문";
+  if (game.knock) return "누군가 등대 문을 두드린다 · 1층 창고 문";
   if (night.remaining > 0) return `난간의 망원경으로 바다를 지켜보기 · 남은 배 ${night.remaining}척 · N 남은 배 넘기기`;
   return "오늘 밤 배는 모두 지나갔다 · N 새벽으로";
 }
@@ -744,7 +741,8 @@ function move(dt) {
 
 function updateMercury(dt, zone) {
   // per real second; a mercury spill on the lantern floor doubles what the room gives off
-  const rate = { lantern: 0.12 * game.spillRate, gallery: -0.2, radio: -0.03, stairs: -0.03 }[zone];
+  // the lens room gives off mercury; fresh air on the gallery clears it; every other room slowly too
+  const rate = zone === "lantern" ? 0.12 * game.spillRate : zone === "gallery" ? -0.2 : -0.03;
   mercury = Math.max(0, Math.min(100, mercury + rate * dt));
   if (document.activeElement !== slider) slider.value = String(Math.round(mercury));
 }
@@ -855,4 +853,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // dev hook for automated checks
-window.__lh = { player, world, interact, diag, game, closeup, night, camera, postUniforms, frameOnce: (dt = 1 / 60) => update(dt, clock.elapsedTime), get scope() { return scope; }, signalKey, answerDoor, enterScope, exitScope, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
+window.__lh = { player, world, interact, diag, game, closeup, night, camera, postUniforms, frameOnce: (dt = 1 / 60) => update(dt, clock.elapsedTime), get scope() { return scope; }, signalKey, answerDoor, enterScope, exitScope, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; }, set mode(v) { mode = v; } };
