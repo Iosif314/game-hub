@@ -454,7 +454,13 @@ export function buildWorld(scene) {
 
   // level 1 — living quarters: bunk, stove, table, the mirror; survivors who are let in live here
   const y1 = FLOOR_H;
-  place(M.bunk(), polar(deg(300), 3.2, y1), faceCentre(deg(300)) + Math.PI / 2, null, 0.9);
+  // the bunk lies along the wall; two circles cover its length
+  const bunk = place(M.bunk(), polar(deg(300), 3.3, y1), faceCentre(deg(300)));
+  bunk.updateMatrixWorld(true);
+  for (const x of [-0.55, 0.55]) OBSTACLES.push({ ...xz(bunk.localToWorld(new THREE.Vector3(x, 0, 0))), r: 0.55, level: 1 });
+  // bedside table at the head of the bunk, where the hand lantern starts
+  const stand = place(M.nightstand(), bunk.localToWorld(new THREE.Vector3(-1.32, 0, 0)), bunk.rotation.y, null, 0.3);
+  solids.push(stand);
   place(M.stove(), polar(deg(340), 3.35, y1), faceCentre(deg(340)), null, 0.4);
   place(M.table(), polar(deg(20), 1.8, y1), 0.4, null, 0.5);
   const mirror = M.mirror();
@@ -483,10 +489,9 @@ export function buildWorld(scene) {
   printer.userData.interact = { id: "tape", label: "전신 테이프 읽기" };
   interactables.push(printer);
   deskM.add(printer);
-  // the hand lantern starts on the desk; it lives directly in the scene so it can be picked up and moved
-  deskM.updateMatrixWorld(true);
+  // the hand lantern starts on the bedside table; it lives directly in the scene so it can be picked up and moved
   const lantern = M.handLantern();
-  lantern.position.copy(deskM.localToWorld(new THREE.Vector3(-0.52, 0.8, -0.12)));
+  lantern.position.copy(stand.position).add(new THREE.Vector3(0, 0.58, 0));
   lantern.userData.interact = { id: "lantern", label: "랜턴 들기" };
   scene.add(lantern);
   interactables.push(lantern);

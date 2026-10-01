@@ -361,6 +361,22 @@ export function bunk() {
   return g;
 }
 
+// small bedside table: the keeper's lantern sits here through the day
+export function nightstand() {
+  const g = new THREE.Group();
+  g.add(mesh(new THREE.BoxGeometry(0.42, 0.04, 0.38), WOOD, 0, 0.56, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.38, 0.3, 0.34), WOOD, 0, 0.36, 0));
+  for (const [x, z] of [
+    [-0.17, -0.15],
+    [0.17, -0.15],
+    [-0.17, 0.15],
+    [0.17, 0.15],
+  ]) {
+    g.add(mesh(new THREE.BoxGeometry(0.04, 0.54, 0.04), WOOD, x, 0.27, z));
+  }
+  return g;
+}
+
 // cast-iron stove with its flue going up through the ceiling
 export function stove() {
   const g = new THREE.Group();
