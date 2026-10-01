@@ -51,6 +51,9 @@ const postUniforms = {
   tDiffuse: { value: rt.texture },
   grid: { value: new THREE.Vector2(W, H) },
   exposure: { value: 1.15 },
+  // how much of each step between greys is dithered: 1 = all of it (grainy), lower = only the middle,
+  // the rest snaps to the nearer grey
+  dither: { value: 0.45 },
 };
 postScene.add(
   new THREE.Mesh(
@@ -62,6 +65,7 @@ postScene.add(
         uniform sampler2D tDiffuse;
         uniform vec2 grid;
         uniform float exposure;
+        uniform float dither;
         varying vec2 vUv;
         // interleaved gradient noise: an evenly spread threshold with no regular cross-hatch
         float ign(vec2 p){ return fract(52.9829189 * fract(dot(floor(p), vec2(0.06711056, 0.00583715)))); }
@@ -89,7 +93,7 @@ postScene.add(
           c /= 16.0;
           // the lamp is the only saturated warm thing in the scene; everything else goes grey
           float glow = smoothstep(0.15, 0.55, c.r - c.b);
-          vec3 outc = quantise(tone(c), ign(gl_FragCoord.xy));
+          vec3 outc = quantise(tone(c), 0.5 + (ign(gl_FragCoord.xy) - 0.5) * dither);
           gl_FragColor = vec4(mix(outc, vec3(1.0, 0.93, 0.74), glow), 1.0);
         }`,
     }),
@@ -851,4 +855,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // dev hook for automated checks
-window.__lh = { player, world, interact, diag, game, closeup, night, camera, frameOnce: (dt = 1 / 60) => update(dt, clock.elapsedTime), get scope() { return scope; }, signalKey, answerDoor, enterScope, exitScope, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
+window.__lh = { player, world, interact, diag, game, closeup, night, camera, postUniforms, frameOnce: (dt = 1 / 60) => update(dt, clock.elapsedTime), get scope() { return scope; }, signalKey, answerDoor, enterScope, exitScope, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
