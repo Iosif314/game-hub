@@ -181,3 +181,16 @@ body { display: flex; align-items: center; justify-content: center; }
 .paper-supply .news { margin: 10px 0; padding: 8px 10px; background: #cfc9ba; color: #1b1a18; }
 .paper-supply .news-title { font-family: "Galmuri14", "Galmuri11", monospace; font-size: 1.15em; margin-bottom: 4px; }
 .paper-supply .quote { margin-top: 6px; }
+
+/* telescope: everything outside the eyepiece circle goes dark */
+#scope {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, transparent 0, transparent 34%, rgba(8, 8, 9, 0.85) 38%, #080809 44%);
+}
+#scope { z-index: 1; }
+#menu, #toast, #clock, #hint, #paper { z-index: 2; }
+.paper-door { background: rgba(14, 13, 15, 0.96); border: 1px solid var(--paper); }
+.paper-door .quote { margin-top: 8px; color: var(--glow); }
+#menu.in-scope { top: auto; bottom: 2%; min-width: 60%; font-size: clamp(11px, 1.3vw, 14px); line-height: 1.5; background: rgba(14, 13, 15, 0.8); }

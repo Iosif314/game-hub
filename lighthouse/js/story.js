@@ -22,7 +22,7 @@ export const STORY = [
       goods: [
         ["석유", 150],
         ["여분 맨틀", 4],
-        ["식량", "1주일치"],
+        ["식량", 7],
       ],
       newspaper: {
         title: "해안 방어선 굳건",
@@ -39,10 +39,6 @@ export const STORY = [
         { id: "home", text: `${FLAGS.home}(본국 선적) 선박은 등을 밝혀 인도할 것.` },
         { id: "blank", text: `${FLAGS.blank}(무등록) 선박은 신호로 정지시키고 정체를 확인할 것.` },
       ],
-      ships: [
-        { name: "에델호", kind: "화물선", flag: FLAGS.home, eta: "21:00" },
-        { name: "갈매기 3호", kind: "어선", flag: FLAGS.neutral, eta: "23:30" },
-      ],
       weather: "맑음 · 서풍 약함",
       notices: ["등대지기 급여는 매주 보급선으로 지급함."],
     },
@@ -56,7 +52,6 @@ export const STORY = [
     ],
     wire: {
       orders: [{ id: "dark", text: "등을 끈 채 항해하는 선박(무등화)은 정지시키고 본부에 보고할 것." }],
-      ships: [{ name: "제7 초계정", kind: "군함", flag: FLAGS.military, eta: "22:00" }],
       weather: "밤부터 짙은 안개",
       notices: [],
     },
@@ -70,10 +65,6 @@ export const STORY = [
     ],
     wire: {
       orders: [],
-      ships: [
-        { name: "마르타호", kind: "화물선", flag: FLAGS.home, eta: "20:30" },
-        { name: "제7 초계정", kind: "군함", flag: FLAGS.military, eta: "01:00" },
-      ],
       weather: "흐림 · 북풍",
       notices: ["다음 보급선은 8일째에 입항함."],
     },
@@ -87,10 +78,6 @@ export const STORY = [
     ],
     wire: {
       orders: [{ id: "home", text: `${FLAGS.home} 선박도 정지시켜 검문할 것. 적이 본국 선적을 위장하고 있음.`, changed: true }],
-      ships: [
-        { name: "에델호", kind: "화물선", flag: FLAGS.home, eta: "21:30" },
-        { name: "이름 없음", kind: "소형선", flag: FLAGS.blank, eta: "미상" },
-      ],
       weather: "비 · 남동풍 강함",
       notices: [],
     },
@@ -104,7 +91,6 @@ export const STORY = [
     ],
     wire: {
       orders: [],
-      ships: [{ name: "갈매기 3호", kind: "어선", flag: FLAGS.neutral, eta: "22:00" }],
       weather: "폭풍 접근",
       notices: ["등대 운영 감사를 실시함. 일지를 빠짐없이 기록할 것.", "기상 악화로 다음 보급선 입항이 연기됨."],
     },

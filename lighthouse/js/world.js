@@ -331,6 +331,7 @@ export function buildWorld(scene) {
 
   // rotating beam
   const beam = new THREE.Group();
+  const beamSpots = [];
   const beamMat = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
@@ -347,6 +348,11 @@ export function buildWorld(scene) {
     cone.rotation.z = (dir * Math.PI) / 2;
     cone.position.x = dir * 45;
     beam.add(cone);
+    // the beam actually lights what it sweeps over, so dark-running ships show for a moment
+    const spot = new THREE.SpotLight(0xffffff, 0, 400, 0.07, 0.5, 1);
+    spot.target.position.set(dir * 100, -15, 0);
+    beam.add(spot, spot.target);
+    beamSpots.push(spot);
   }
   beam.position.y = FLOOR_H + 1.35;
   scene.add(beam);
@@ -413,8 +419,24 @@ export function buildWorld(scene) {
   }
   place(M.oilDrum(), polar(deg(290), 3.3), 0.3, { id: "drum", label: "석유 보충" }, 0.32);
   place(M.oilDrum(), polar(deg(282), 3.35), 1.1, null, 0.32);
-  const person = place(M.survivor(), polar(deg(215), 1.7), faceCentre(deg(215)) + 0.6, { id: "survivor", label: "생존자와 대화" }, 0.3);
-  animated.survivor = person;
+  // the door out onto the rocks, where survivors of a wreck come knocking
+  const door = new THREE.Group();
+  door.add(new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.0, 0.08), new THREE.MeshStandardMaterial({ color: 0x4a3f33, roughness: 0.9 })));
+  const doorFrame = new THREE.MeshStandardMaterial({ color: 0x2c2722 });
+  for (const x of [-0.55, 0.55]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.1, 0.14), doorFrame);
+    post.position.x = x;
+    door.add(post);
+  }
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 4, 10), new THREE.MeshStandardMaterial({ color: 0x777065, metalness: 0.6, roughness: 0.4 }));
+  ring.position.set(0.32, 0, 0.06);
+  door.add(ring);
+  const doorA = deg(200);
+  door.position.copy(polar(doorA, R - 0.06, 1.0));
+  door.rotation.y = faceCentre(doorA);
+  door.userData.interact = { id: "door", label: "등대 문" };
+  scene.add(door);
+  interactables.push(door);
 
   // lantern
   const lens = place(M.lensAssembly(), new THREE.Vector3(0, FLOOR_H, 0), 0, { id: "lens", label: "렌즈 작업" });
@@ -424,7 +446,19 @@ export function buildWorld(scene) {
 
   // gallery
   const scopeA = deg(10);
-  place(M.telescope(), polar(scopeA, R + 1.0, FLOOR_H), Math.PI - scopeA, { id: "telescope", label: "망원경 보기" }, 0.3);
+  place(M.telescope(), polar(scopeA, R + 1.0, FLOOR_H), Math.PI - scopeA, { id: "telescope", label: "망원경과 신호등" }, 0.3);
+  const telescope = { eye: polar(scopeA, R + 1.0, FLOOR_H + 1.2), bearing: scopeA };
+
+  // the reef: rocks breaking the surface in a ring off the tower
+  for (let i = 0; i < 26; i++) {
+    const a = deg(-80 + i * 6.5 + Math.sin(i * 7.1) * 2);
+    const r = 52 + Math.sin(i * 3.3) * 6;
+    const sz = 1.2 + ((i * 37) % 10) / 6;
+    const rk = new THREE.Mesh(new THREE.IcosahedronGeometry(sz, 0), rockMat);
+    rk.position.copy(polar(a, r, SEA_Y + sz * 0.2));
+    rk.rotation.set(i, i * 2, 0);
+    scene.add(rk);
+  }
 
   // supply boat moored off the rocks and the crate it leaves in the radio room (shown on supply days)
   const crate = place(M.supplyCrate(), polar(deg(170), 1.9), deg(20), { id: "crate", label: "보급품 확인" });
@@ -458,18 +492,34 @@ export function buildWorld(scene) {
     lensLamp,
     flame: lens.userData.flame,
     beam,
+    beamMat,
+    beamSpots,
     beamAngle: 0,
   };
 
-  return { interactables, solids, animated, env, supply: { crate, boat }, lantern, lanternLight: deskLamp, spawn: polar(deg(300), 2.0, 0), spawnYaw: 0 };
+  return {
+    interactables,
+    solids,
+    animated,
+    env,
+    supply: { crate, boat },
+    lantern,
+    lanternLight: deskLamp,
+    telescope,
+    survivorModels: [],
+    spawn: polar(deg(300), 2.0, 0),
+    spawnYaw: 0,
+  };
 }
 
 export function animateWorld(world, t) {
-  const { seaTime, ship, survivor } = world.animated;
+  const { seaTime, ship } = world.animated;
   seaTime.value = t;
   ship.position.x = -150 + ((t * 1.2) % 300);
   // slow breathing
-  survivor.userData.torso.scale.set(1 + Math.sin(t * 1.6) * 0.015, 1, 1 + Math.sin(t * 1.6) * 0.02);
+  for (const [i, p] of world.survivorModels.entries()) {
+    p.userData.torso.scale.set(1 + Math.sin(t * 1.6 + i) * 0.015, 1, 1 + Math.sin(t * 1.6 + i) * 0.02);
+  }
 }
 
 const smooth = (a, b, x) => {
@@ -478,7 +528,7 @@ const smooth = (a, b, x) => {
 };
 
 // Sun arc from 06:00 to 18:00, dim moonlight at night; the lamp and its beam only when lit
-export function setTimeOfDay(world, hours, lampOn, rotating, dt) {
+export function setTimeOfDay(world, hours, lampOn, rotating, dt, shutter = false) {
   const e = world.env;
   const arc = (Math.PI * (hours - 6)) / 12;
   const elev = Math.sin(arc);
@@ -491,10 +541,38 @@ export function setTimeOfDay(world, hours, lampOn, rotating, dt) {
   e.skyMat.color.setScalar(skyV);
   e.background.setRGB(0.553 * skyV, 0.541 * skyV, 0.518 * skyV);
   e.fog.color.copy(e.background);
+  // clear nights see further; the weather can pull the fog in
+  const fogScale = world.weatherFog || 1;
+  e.fog.near = (30 + 50 * (1 - dayF)) * fogScale;
+  e.fog.far = (260 + 240 * (1 - dayF)) * fogScale;
   for (const m of e.windows) m.color.setScalar(0.15 + 0.85 * dayF);
   e.lensLamp.intensity = lampOn ? 8 : 0;
   e.flame.visible = lampOn;
-  e.beam.visible = lampOn;
+  // the shutter blocks the light from reaching the sea; the flame keeps burning behind it
+  e.beam.visible = lampOn && !shutter;
+  for (const s of e.beamSpots) s.intensity = lampOn && !shutter ? 900 * (1 - dayF) : 0;
+  world.animated.ship.visible = dayF > 0.3;
   if (lampOn && rotating) e.beamAngle -= dt * 0.5;
   e.beam.rotation.y = e.beamAngle;
+}
+
+// people let in through the door: they stay in the radio room
+const SURVIVOR_SLOTS = [
+  [215, 1.7],
+  [245, 1.8],
+  [185, 1.6],
+  [265, 2.0],
+  [160, 1.9],
+];
+export function addSurvivorModel(world, scene, index, info) {
+  const [a, r] = SURVIVOR_SLOTS[index % SURVIVOR_SLOTS.length];
+  const ang = deg(a);
+  const p = M.survivor();
+  p.position.copy(polar(ang, r));
+  p.rotation.y = Math.atan2(-Math.cos(ang), -Math.sin(ang)) + 0.5;
+  p.userData.interact = { id: "survivor", label: "생존자", index, ...info };
+  scene.add(p);
+  world.interactables.push(p);
+  world.survivorModels.push(p);
+  OBSTACLES.push({ x: p.position.x, z: p.position.z, r: 0.3, upper: false });
 }

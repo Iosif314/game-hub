@@ -3,6 +3,7 @@
 // dusk (light the lamp, plus one job) → wire (the evening telegram) → night (paused for now) →
 // results → next dawn. The clock only moves when a job is done.
 import { STORY } from "./story.js";
+import { rosterFor, KIND_NAMES, FLAG_NAMES } from "./nights.js";
 
 export const DAWN_JOBS = 4;
 const DUSK_JOBS = 1;
@@ -49,6 +50,14 @@ export function createGame(hooks) {
     eq: { mantle: 55, bath: 45, lens: 50, wound: 0, pressure: 0, tank: 40 },
     drum: 300,
     mantles: 3, // spare mantles on the shelf
+    food: 3, // days of food for one person
+    hungry: false,
+    survivors: [], // people let in: { from, desc }
+    knocks: [], // wrecks whose survivors are (or will be) at the door
+    turnedAway: 0,
+    gone: new Set(), // ids of ships wrecked or detained
+    suspicion: 0, // hidden: how much the coast station distrusts this light
+    pending: { notices: [], radio: [], suspicion: 0 }, // reactions arriving with today's radio and telegram
     spill: false,
     done: [],
     night: null,
@@ -96,7 +105,42 @@ export function createGame(hooks) {
     if (!lit) hooks.toast("등불 없이 밤이 되었다");
   }
 
-  function results() {
+  // what each ship's fate reads as in the results
+  function fateText(o) {
+    if (o.result === "detained") return "억류했다";
+    if (o.result === "wrecked") {
+      return { shutter: "차광막을 닫아 난파시켰다", dark: "어둠 속에서 암초에 부딪혔다", accident: "암초에 걸려 난파했다", sank: "가라앉았다" }[o.how] || "난파했다";
+    }
+    if (o.decision === "stop-send") return "검문한 뒤 보냈다";
+    if (o.decision === "stop" && o.spec.ignoresStop) return "정지 신호를 무시하고 지나갔다";
+    if (o.decision === "guide") return "인도해 지나갔다";
+    return "지나갔다";
+  }
+
+  // the delayed consequences: nothing is said tonight, the reactions arrive with tomorrow's radio and telegram
+  function reactionsFor(outcomes) {
+    const out = { notices: [], radio: [], suspicion: 0 };
+    for (const o of outcomes) {
+      const r = o.spec.react || {};
+      let re = null;
+      if (o.result === "wrecked") {
+        re = r.wrecked || (o.spec.listed ? { notice: `어젯밤 ${o.spec.eta} 통과 예정이던 ${o.spec.name}, 입항하지 않았음. 통과 여부를 보고할 것.`, suspicion: 2 } : null);
+      } else if (o.result === "detained") {
+        re = r.detained || null;
+      } else if (o.decision === "stop-send") {
+        re = o.spec.afterStop === "detain" ? r.sent || r.passed || null : null;
+      } else if (o.spec.expect === "stop" && !(o.decision === "stop" && o.spec.ignoresStop)) {
+        re = r.passed || null;
+      }
+      if (!re) continue;
+      if (re.notice) out.notices.push(re.notice);
+      if (re.radio) out.radio.push(re.radio);
+      out.suspicion += re.suspicion || 0;
+    }
+    return out;
+  }
+
+  function results(night) {
     const n = g.night;
     const e = g.eq;
     if (n.lit) e.mantle = clamp(e.mantle - (20 + Math.random() * 15));
@@ -107,17 +151,41 @@ export function createGame(hooks) {
     const used = n.hoursLit * 3.5;
     e.tank = clamp(e.tank - used);
     hooks.expose(-6); // a night's sleep
+
+    // survivors who knocked and were left outside all day give up
+    for (const k of g.knocks) if (k.arrived && !k.answered) g.turnedAway += k.n;
+    // anyone still outside by morning will be knocking at dawn
+    for (const w of night.wrecks) if (!w.answered) w.when = "dawn";
+    g.knocks = night.wrecks.filter((w) => !w.answered);
+
+    const eaters = 1 + g.survivors.length;
+    g.hungry = g.food < eaters;
+    g.food = Math.max(0, g.food - eaters);
+
+    for (const o of night.outcomes) if (o.result !== "passed") g.gone.add(o.spec.id);
+    const re = reactionsFor(night.outcomes);
+    if (g.turnedAway > 0) re.radio.push(["어선 갈매기 3호", "어젯밤 등대 바위에 사람이 매달려 있었다던데…… 아침엔 아무도 없었대."]);
+    g.turnedAway = 0;
+    g.suspicion += re.suspicion;
+    g.pending = re;
     g.phase = "results";
+
+    const notes = n.notes.slice();
+    if (g.hungry) notes.push("식량이 모자라 굶었다. 내일 새벽은 몸이 무겁다");
+    const last = g.day >= DAYS;
+    const sus = g.suspicion <= 1 ? "낮다" : g.suspicion <= 4 ? "커지고 있다" : "높다";
     return {
       day: g.day,
-      last: g.day >= DAYS,
+      last,
       lines: [
         ["등불", n.lit ? (n.hoursLit >= 10 ? "밤새 켜져 있었다" : `${n.hoursLit}시간 만에 꺼졌다`) : "켜지 않았다"],
         ["빛 세기", n.lit ? (n.brightness >= 0.7 ? "강함" : n.brightness >= 0.45 ? "보통" : "약함") : "-"],
         ["회전", n.rotation],
         ["석유 사용", `${Math.round(used)} (드럼 남은 양 ${Math.round(g.drum)})`],
+        ["식량", `${g.food}일치 남음 (${eaters}명이 먹었다)`],
       ],
-      notes: n.notes,
+      ships: night.outcomes.map((o) => [o.spec.name, fateText(o)]),
+      notes,
       done: g.done.slice(),
       tomorrow: [
         ["맨틀", condition(e.mantle)],
@@ -125,6 +193,8 @@ export function createGame(hooks) {
         ["수은 욕조", condition(e.bath)],
         ["석유 탱크", condition(e.tank)],
       ],
+      // the five-day build ends here: show what tomorrow's telegram would have said, and the suspicion
+      final: last ? { suspicion: sus, notices: re.notices, radio: re.radio.map(([w, t]) => `${w}: ${t}`) } : null,
     };
   }
 
@@ -146,7 +216,7 @@ export function createGame(hooks) {
       }
       if (g.phase === "dusk") return g.lampOn ? `N  일정 마치기${g.jobs ? ` · 정비 ${g.jobs}회 가능` : ""}` : "렌즈실에서 예열과 점화 · 켜지 않고 N을 누르면 등불 없는 밤";
       if (g.phase === "wire") return g.today.tape ? "N  밤으로 넘기기 (배 판단은 다음 단계에서)" : "전신이 왔다 · 무전실 전신기에서 테이프 읽기 · N 밤으로";
-      if (g.phase === "night") return "N  새벽으로 넘기기 (배 판단은 다음 단계에서)";
+      if (g.phase === "night") return hooks.nightHint ? hooks.nightHint() : "";
       return "";
     },
     // hours used for lighting: the paused phases show midday and deep night
@@ -243,7 +313,7 @@ export function createGame(hooks) {
         enterNight();
         return null;
       }
-      if (g.phase === "night") return results();
+      if (g.phase === "night") return results(hooks.nightRecord());
       return null;
     },
     nextDay() {
@@ -252,12 +322,29 @@ export function createGame(hooks) {
       g.minutes = 5 * 60;
       g.phase = "dawn";
       g.lampOn = n.lit && n.hoursLit >= 10;
-      g.jobs = DAWN_JOBS;
+      for (const k of g.knocks) k.arrived = true;
+      if (g.hungry) hooks.toast("배가 고파 몸이 무겁다 · 오늘 정비는 3회");
+      g.jobs = g.hungry ? DAWN_JOBS - 1 : DAWN_JOBS;
       g.done = [];
       g.night = null;
       g.tonight = [];
       g.weather = null;
       g.today = { radio: false, supply: false, tape: false };
+    },
+    get nightInfo() {
+      const n = g.night;
+      return { lit: n.lit, hoursLit: n.hoursLit, brightness: n.brightness, rotation: n.rotation, steady: n.steady, weather: story().wire.weather };
+    },
+    // survivors at the door: the first knock that has arrived
+    get knock() {
+      return g.knocks.find((k) => k.arrived && !k.answered) || null;
+    },
+    answerDoor(letIn) {
+      const k = api.knock;
+      if (!k) return;
+      k.answered = true;
+      if (letIn) for (let i = 0; i < k.n; i++) g.survivors.push({ from: k.from, desc: k.desc });
+      else g.turnedAway += k.n;
     },
     // --- the day's information ---
     get supplyWaiting() {
@@ -271,7 +358,8 @@ export function createGame(hooks) {
     },
     listenRadio() {
       if (g.phase !== "day") return null;
-      const lines = story().radio || [];
+      // last night's consequences are part of today's chatter
+      const lines = (story().radio || []).concat(g.pending.radio);
       if (!g.today.radio) {
         g.today.radio = true;
         g.radioLog.push({ day: g.day, lines });
@@ -285,13 +373,19 @@ export function createGame(hooks) {
       for (const [name, n] of sup.goods) {
         if (name === "석유") g.drum += n;
         if (name === "여분 맨틀") g.mantles += n;
+        if (name === "식량") g.food += n;
       }
       for (const r of sup.sailor) g.rumours.push({ day: g.day, from: "보급선 선원", text: r });
       return sup;
     },
     readTape() {
       if (g.phase !== "wire") return null;
-      const w = story().wire;
+      const base = story().wire;
+      // the expected-ships list comes from the actual roster, so it never names a ship that is gone
+      const ships = rosterFor(g.day, g.gone)
+        .filter((sp) => sp.listed)
+        .map((sp) => ({ name: sp.name, kind: KIND_NAMES[sp.kind], flag: FLAG_NAMES[sp.flag], eta: sp.eta }));
+      const w = { ...base, ships, notices: g.pending.notices.concat(base.notices) };
       if (!g.today.tape) {
         g.today.tape = true;
         for (const o of w.orders) {

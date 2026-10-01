@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { buildWorld, animateWorld, setTimeOfDay, groundAt, blocked, hardBlocked, zoneOf } from "./world.js";
+import { buildWorld, animateWorld, setTimeOfDay, addSurvivorModel, groundAt, blocked, hardBlocked, zoneOf } from "./world.js";
+import { createNight } from "./night.js";
 import { createGame, TASKS, DAYS } from "./game.js";
 import { createCloseup } from "./closeup.js";
 
@@ -26,6 +27,8 @@ const hintEl = $("hint");
 const menuEl = $("menu");
 const resultsEl = $("results");
 const paperEl = $("paper");
+const scopeEl = $("scope");
+const crosshairEl = $("crosshair");
 
 // --- renderer: full-quality render into an HDR target, then each mosaic block is averaged
 // and dithered to four greys ---
@@ -137,7 +140,8 @@ document.addEventListener("pointerlockchange", () => {
   if (document.pointerLockElement === view) {
     mode = "play";
     overlay.classList.add("hidden");
-  } else if (mode === "play") {
+  } else if (mode === "play" || mode === "scope") {
+    if (scope) exitScope();
     showMenu("클릭해서 계속");
   }
 });
@@ -151,11 +155,18 @@ function showMenu(hint) {
 }
 
 document.addEventListener("mousemove", (e) => {
-  if (mode !== "play") return;
+  if (mode !== "play" && mode !== "scope") return;
   if (Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) {
     diag.lookSpikes++;
     diag.lastSpike = `${e.movementX}, ${e.movementY}`;
     console.warn("ignored mouse spike", e.movementX, e.movementY);
+    return;
+  }
+  if (scope) {
+    // finer aim when zoomed in
+    const k = 0.0022 * (scope.fov / 70);
+    scope.yaw -= e.movementX * k;
+    scope.pitch = Math.max(-0.6, Math.min(0.3, scope.pitch - e.movementY * k));
     return;
   }
   player.yaw -= e.movementX * 0.0022;
@@ -175,10 +186,21 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (reading) {
-    if (e.code === "Space") {
+    if (reading.kind === "door" && (e.code === "Digit1" || e.code === "Digit2")) answerDoor(e.code === "Digit1");
+    else if (e.code === "Space") {
       e.preventDefault();
       advanceRadio();
-    } else if (e.code === "KeyE" || e.code === "Escape") closePaper();
+    } else if ((e.code === "KeyE" || e.code === "Escape") && reading.kind !== "door") closePaper();
+    else if (e.code === "Escape") closePaper();
+    return;
+  }
+  if (mode === "scope") {
+    if (e.code === "KeyE" || e.code === "Escape") exitScope();
+    else if (e.code.startsWith("Digit")) signalKey(e.code);
+    else if (e.code === "KeyN") {
+      exitScope();
+      skipPhase();
+    }
     return;
   }
   if (mode !== "play") return;
@@ -194,6 +216,10 @@ document.addEventListener("keydown", (e) => {
   if (e.code === "KeyN") skipPhase();
 });
 document.addEventListener("keyup", (e) => keys.delete(e.code));
+document.addEventListener("wheel", (e) => {
+  if (!scope) return;
+  scope.fov = Math.max(3, Math.min(24, scope.fov * (e.deltaY > 0 ? 1.12 : 0.89)));
+});
 
 slider.addEventListener("input", () => {
   mercury = Number(slider.value);
@@ -222,6 +248,8 @@ const game = createGame({
   expose(amount) {
     mercury = Math.max(0, Math.min(100, mercury + amount));
   },
+  nightHint: () => nightHint(),
+  nightRecord: () => ({ outcomes: night.outcomes.slice(), wrecks: night.wrecks.slice() }),
 });
 
 // station menu: pick a task with the number keys so the pointer can stay locked
@@ -269,11 +297,21 @@ function chooseTask(i) {
 }
 
 function skipPhase() {
+  // N at night lets the remaining ships play out by default
+  if (game.state.phase === "night" && night.remaining > 0) night.resolveRest();
   const summary = game.skip();
+  if (game.state.phase === "night" && nightDay !== game.state.day) {
+    nightDay = game.state.day;
+    night.start(game.state.day, game.nightInfo, game.state.gone);
+    // fog and storms close in the view
+    const w = game.nightInfo.weather;
+    world.weatherFog = /안개/.test(w) ? 0.35 : /폭풍/.test(w) ? 0.45 : /비/.test(w) ? 0.7 : 1;
+  }
   if (summary) showResults(summary);
 }
 
 function showResults(r) {
+  world.weatherFog = 1;
   mode = "results";
   keys.clear();
   closeMenu();
@@ -283,10 +321,16 @@ function showResults(r) {
     <h2>${r.day}일차 밤</h2>
     <table>${rows(r.lines)}</table>
     ${r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}
+    ${r.ships.length ? `<h3>오늘 밤 배</h3><table>${rows(r.ships)}</table>` : ""}
     <h3>오늘 한 일</h3>
     <div class="done">${r.done.length ? r.done.join("<br>") : "아무것도 하지 않았다"}</div>
     <h3>다음 날 장비 상태</h3>
     <table>${rows(r.tomorrow)}</table>
+    ${
+      r.final
+        ? `<h3>여섯째 날 아침에 올 소식</h3><div class="done">${r.final.notices.concat(r.final.radio).join("<br>") || "조용하다"}</div><h3>본부의 의심</h3><div class="done">${r.final.suspicion}</div>`
+        : ""
+    }
     <div class="hint">${r.last ? "시험판의 마지막 날이에요 · 클릭하면 처음부터" : "클릭해서 다음 날로"}</div>`;
   resultsEl.classList.remove("hidden");
 }
@@ -414,6 +458,138 @@ function openLogbook() {
   );
 }
 
+// --- the night: ships, the telescope and signal lamp, survivors at the door ---
+const night = createNight(scene, {
+  toast,
+  setClock(m) {
+    const s = game.state;
+    if (m === null) s.minutes += 45;
+    else if (m > s.minutes) s.minutes = m;
+  },
+  getClock: () => game.state.minutes,
+});
+let nightDay = 0;
+
+function nightHint() {
+  if (game.knock) return "누군가 등대 문을 두드린다 · 무전실 문";
+  if (night.remaining > 0) return `난간의 망원경으로 바다를 지켜보기 · 남은 배 ${night.remaining}척 · N 남은 배 넘기기`;
+  return "오늘 밤 배는 모두 지나갔다 · N 새벽으로";
+}
+
+// survivors of a wreck reach the door either later the same night or at dawn
+function updateKnocks(dt) {
+  for (const w of night.wrecks) {
+    if (w.when !== "night" || w.arrived) continue;
+    if (w.timer === undefined) w.timer = 10 + Math.random() * 25;
+    w.timer -= dt;
+    if (w.timer <= 0) {
+      w.arrived = true;
+      if (!game.state.knocks.includes(w)) game.state.knocks.push(w);
+      toast("쾅, 쾅…… 누군가 등대 문을 두드린다");
+    }
+  }
+}
+
+function openDoor() {
+  const k = game.knock;
+  if (!k) {
+    toast("문밖에는 파도 소리뿐이다");
+    return;
+  }
+  const by = k.how === "shutter" ? "<div class=\"quote\">“불이…… 등대 불이 갑자기 꺼졌어요……”</div>" : "";
+  openPaper(
+    "door",
+    `<div class="head">문밖에 누군가 있다</div>
+     <div>${esc(k.desc)}</div>
+     <div class="sub">${esc(k.from)}에서 살아남은 사람 ${k.n}명</div>${by}
+     <div class="sub">식량 ${game.state.food}일치 · 등대에 있는 사람 ${1 + game.state.survivors.length}명</div>
+     <div class="foot">1 들여보낸다 · 2 내보낸다</div>`,
+  );
+}
+
+function answerDoor(letIn) {
+  const k = game.knock;
+  if (!k) return;
+  const before = game.state.survivors.length;
+  game.answerDoor(letIn);
+  if (letIn) {
+    for (let i = before; i < game.state.survivors.length; i++) addSurvivorModel(world, scene, i, game.state.survivors[i]);
+    toast("문을 열어 들여보냈다");
+  } else toast("문을 열지 않았다. 발소리가 멀어진다");
+  closePaper();
+}
+
+// telescope: the view from the eyepiece, with the signal lamp worked from the same spot
+let scope = null; // { yaw, pitch, fov, refresh }
+function enterScope() {
+  const b = world.telescope.bearing;
+  scope = { yaw: Math.atan2(-Math.cos(b), -Math.sin(b)), pitch: -0.2, fov: 14, refresh: 0 };
+  mode = "scope";
+  keys.clear();
+  promptEl.textContent = "";
+  scopeEl.classList.remove("hidden");
+  menuEl.classList.add("in-scope");
+  crosshairEl.style.display = "none";
+  postUniforms.exposure.value = 1.7;
+  // the beam's haze would wash out the boosted eyepiece view whenever it sweeps past
+  world.env.beamMat.opacity = 0.06;
+  renderSignal();
+}
+function exitScope() {
+  scope = null;
+  scopeEl.classList.add("hidden");
+  menuEl.classList.remove("in-scope");
+  crosshairEl.style.display = "";
+  menuEl.classList.add("hidden");
+  postUniforms.exposure.value = 1.15;
+  world.env.beamMat.opacity = 0.16;
+  camera.fov = 70;
+  camera.updateProjectionMatrix();
+  if (mode === "scope") mode = "play";
+}
+
+function renderSignal() {
+  const a = night.active;
+  let html;
+  if (game.state.phase !== "night") {
+    html = `<div class="menu-status">밤이 되면 지나가는 배를 여기서 지켜본다</div>`;
+  } else if (!a) {
+    html = `<div class="menu-status">바다가 조용하다${night.remaining ? " · 다음 배를 기다린다" : " · 오늘 밤 배는 모두 지나갔다"}</div>`;
+  } else {
+    const head = `${a.spec.lights ? "불빛을 단 배" : "불 꺼진 배"} · 위험선까지 ${night.distance}m${night.shutter ? " · 차광막 닫힘" : ""}`;
+    const asked = a.asked.map(([q, ans]) => `<div>${esc(q)}: ${esc(ans)}</div>`).join("");
+    let body = "";
+    if (a.note) body += `<div>${esc(a.note)}</div>`;
+    if (a.state === "approach") {
+      body += `<div>1 정체 · 2 목적지 · 3 화물 · 4 부상자 (물을수록 배가 다가온다)</div><div>5 인도한다 · 6 멈춰 세운다 · 7 차광막을 닫는다</div>`;
+    } else if (a.state === "stopping") body += "<div>배가 멈추고 있다……</div>";
+    else if (a.state === "stopped") body += `<div>검문: ${esc(a.spec.inspect)}</div><div>1 보낸다 · 2 억류하고 본부에 알린다</div>`;
+    else if (a.state === "guided") body += `<div>${a.decision === "shutter" ? "빛을 가렸다" : a.decision === "guide" || a.decision === "stop-send" ? "빛을 따라 지나간다" : "아무 신호도 보내지 않았다"}</div>`;
+    else if (a.state === "wrecking") body += "<div>배가 암초에 걸려 기울어진다……</div>";
+    else if (a.state === "anchored") body += "<div>배를 억류하고 본부에 알렸다</div>";
+    html = `<div class="menu-status">${head}</div>${asked}${body}`;
+  }
+  menuEl.innerHTML = `${html}<div class="menu-foot">휠 확대 · E 망원경에서 눈 떼기</div>`;
+  menuEl.classList.remove("hidden");
+}
+
+function signalKey(code) {
+  const a = night.active;
+  if (!a || game.state.phase !== "night") return;
+  const n = Number(code.replace("Digit", ""));
+  if (a.state === "approach") {
+    const asks = ["who", "where", "cargo", "hurt"];
+    if (n >= 1 && n <= 4) night.ask(asks[n - 1]);
+    if (n === 5) night.decide("guide");
+    if (n === 6) night.decide("stop");
+    if (n === 7) night.decide("shutter");
+  } else if (a.state === "stopped") {
+    if (n === 1) night.afterStop("send");
+    if (n === 2) night.afterStop("detain");
+  }
+  renderSignal();
+}
+
 function interact(info) {
   if (info.id === "lantern") {
     pickUpLantern();
@@ -427,6 +603,9 @@ function interact(info) {
   if (info.id === "tape") return openTape();
   if (info.id === "crate") return openSupply();
   if (info.id === "logbook") return openLogbook();
+  if (info.id === "telescope") return enterScope();
+  if (info.id === "door") return openDoor();
+  if (info.id === "survivor") return toast(`${info.from}에서 온 사람 · ${info.desc}  (대화는 다음 단계에서)`);
   toast(NOT_YET[info.id] || info.label);
 }
 
@@ -576,6 +755,75 @@ let fps = 0;
 const diag = { jumps: 0, lastJump: "-", hitches: 0, lastHitch: "-", lookSpikes: 0, lastSpike: "-" };
 const before = new THREE.Vector3();
 
+// one frame of simulation and drawing (also callable from the dev hook)
+function update(dt, t) {
+  if (closeup.active) {
+    closeup.update(dt);
+    return;
+  }
+
+  clockEl.textContent = game.clockText();
+  hintEl.textContent = game.hint() + (game.knock && game.state.phase !== "night" ? " · 누군가 문을 두드린다" : "");
+  before.copy(player.pos);
+  if (mode === "play") move(dt);
+  const jumped = before.distanceTo(player.pos);
+  if (jumped > 0.4) {
+    diag.jumps++;
+    diag.lastJump = `${jumped.toFixed(2)}m (${before.x.toFixed(1)},${before.y.toFixed(1)},${before.z.toFixed(1)} -> ${player.pos.x.toFixed(1)},${player.pos.y.toFixed(1)},${player.pos.z.toFixed(1)})`;
+    console.warn("position jump", diag.lastJump);
+  }
+  const zone = zoneOf(player.pos);
+  updateMercury(dt, zone);
+
+  if (scope) {
+    camera.position.copy(world.telescope.eye);
+    camera.rotation.set(scope.pitch, scope.yaw, 0);
+    if (camera.fov !== scope.fov) {
+      camera.fov = scope.fov;
+      camera.updateProjectionMatrix();
+    }
+    scope.refresh -= dt;
+    if (scope.refresh <= 0) {
+      scope.refresh = 0.2;
+      renderSignal();
+    }
+  } else {
+    camera.position.set(player.pos.x, player.eyeY, player.pos.z);
+    camera.rotation.set(player.pitch, player.yaw, 0);
+  }
+  if (holding) updateHeldLantern(dt, t, jumped > 0.0005);
+  animateWorld(world, t);
+  if (game.state.phase === "night") {
+    night.update(dt);
+    updateKnocks(dt);
+  }
+  setTimeOfDay(world, game.visualHours, game.state.lampOn, game.rotating, dt, game.state.phase === "night" && night.shutter);
+  world.supply.crate.visible = game.supplyWaiting;
+  world.supply.boat.visible = game.supplyBoatHere;
+  if (reading && reading.kind === "radio") {
+    reading.timer += dt;
+    if (reading.timer > 1.8) advanceRadio();
+  }
+
+  target = mode === "play" ? findTarget() : null;
+  promptEl.textContent = target ? `E  ${target.userData.interact.label}` : "";
+
+  renderer.setRenderTarget(rt);
+  renderer.clear();
+  renderer.render(scene, camera);
+  if (holding && !scope) {
+    renderer.clearDepth();
+    renderer.render(heldScene, heldCam);
+  }
+  renderer.setRenderTarget(null);
+  renderer.render(postScene, postCam);
+
+  if (debugOn) {
+    const p = player.pos;
+    debugText.textContent = `구역 ${zone}\n위치 ${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}\n수은 ${mercury.toFixed(1)}\nfps ${fps}\n위치 튐 ${diag.jumps}회  ${diag.lastJump}\n프레임 멈춤 ${diag.hitches}회  ${diag.lastHitch}\n시점 튐(무시함) ${diag.lookSpikes}회  ${diag.lastSpike}`;
+  }
+}
+
 function frame() {
   const rawDt = clock.getDelta();
   const dt = Math.min(0.05, rawDt);
@@ -585,53 +833,7 @@ function frame() {
     console.warn("frame stall", rawDt);
   }
   const t = clock.elapsedTime;
-
-  if (closeup.active) {
-    closeup.update(dt);
-  } else {
-    clockEl.textContent = game.clockText();
-    hintEl.textContent = game.hint();
-    before.copy(player.pos);
-    if (mode === "play") move(dt);
-    const jumped = before.distanceTo(player.pos);
-    if (jumped > 0.4) {
-      diag.jumps++;
-      diag.lastJump = `${jumped.toFixed(2)}m (${before.x.toFixed(1)},${before.y.toFixed(1)},${before.z.toFixed(1)} -> ${player.pos.x.toFixed(1)},${player.pos.y.toFixed(1)},${player.pos.z.toFixed(1)})`;
-      console.warn("position jump", diag.lastJump);
-    }
-    const zone = zoneOf(player.pos);
-    updateMercury(dt, zone);
-
-    camera.position.set(player.pos.x, player.eyeY, player.pos.z);
-    camera.rotation.set(player.pitch, player.yaw, 0);
-    if (holding) updateHeldLantern(dt, t, jumped > 0.0005);
-    animateWorld(world, t);
-    setTimeOfDay(world, game.visualHours, game.state.lampOn, game.rotating, dt);
-    world.supply.crate.visible = game.supplyWaiting;
-    world.supply.boat.visible = game.supplyBoatHere;
-    if (reading && reading.kind === "radio") {
-      reading.timer += dt;
-      if (reading.timer > 1.8) advanceRadio();
-    }
-
-    target = mode === "play" ? findTarget() : null;
-    promptEl.textContent = target ? `E  ${target.userData.interact.label}` : "";
-
-    renderer.setRenderTarget(rt);
-    renderer.clear();
-    renderer.render(scene, camera);
-    if (holding) {
-      renderer.clearDepth();
-      renderer.render(heldScene, heldCam);
-    }
-    renderer.setRenderTarget(null);
-    renderer.render(postScene, postCam);
-
-    if (debugOn) {
-      const p = player.pos;
-      debugText.textContent = `구역 ${zone}\n위치 ${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}\n수은 ${mercury.toFixed(1)}\nfps ${fps}\n위치 튐 ${diag.jumps}회  ${diag.lastJump}\n프레임 멈춤 ${diag.hitches}회  ${diag.lastHitch}\n시점 튐(무시함) ${diag.lookSpikes}회  ${diag.lastSpike}`;
-    }
-  }
+  update(dt, t);
 
   if (toastTimer > 0) {
     toastTimer -= dt;
@@ -649,4 +851,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // dev hook for automated checks
-window.__lh = { player, world, interact, diag, game, closeup, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
+window.__lh = { player, world, interact, diag, game, closeup, night, camera, frameOnce: (dt = 1 / 60) => update(dt, clock.elapsedTime), get scope() { return scope; }, signalKey, answerDoor, enterScope, exitScope, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; } };
