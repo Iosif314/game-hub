@@ -332,14 +332,34 @@ export function buildWorld(scene) {
   // rotating beam
   const beam = new THREE.Group();
   const beamSpots = [];
-  const beamMat = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
+  // soft beam: brightest along its core and near the lens, fading at the edges and out to sea
+  const beamMat = new THREE.ShaderMaterial({
+    uniforms: { strength: { value: 0.22 } },
+    vertexShader: `
+      varying vec3 vN;
+      varying vec3 vV;
+      varying float vAlong;
+      void main() {
+        vAlong = 1.0 - uv.y;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float strength;
+      varying vec3 vN;
+      varying vec3 vV;
+      varying float vAlong;
+      void main() {
+        float core = pow(abs(dot(normalize(vN), normalize(vV))), 2.5);
+        float fade = pow(1.0 - vAlong, 1.6);
+        gl_FragColor = vec4(vec3(1.0, 0.98, 0.94), strength * core * fade);
+      }`,
     transparent: true,
-    opacity: 0.16,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
-    fog: false,
   });
   for (const dir of [1, -1]) {
     // narrow (lens-sized) at the lantern, widening out to sea
@@ -354,7 +374,7 @@ export function buildWorld(scene) {
     beam.add(spot, spot.target);
     beamSpots.push(spot);
   }
-  beam.position.y = FLOOR_H + 1.35;
+  beam.position.y = FLOOR_H + 1.76; // level with the flame at the lens's focus
   scene.add(beam);
   animated.beam = beam;
 
@@ -442,6 +462,14 @@ export function buildWorld(scene) {
   const lens = place(M.lensAssembly(), new THREE.Vector3(0, FLOOR_H, 0), 0, { id: "lens", label: "렌즈 작업" });
   lens.userData.reach = 2.2;
   lensLamp.position.set(0, FLOOR_H + 1.76, 0);
+  // a soft halo round the flame, and a wider haze in the night air that swells as the beam sweeps past you
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  halo.position.set(0, FLOOR_H + 1.76, 0);
+  halo.scale.setScalar(2.2);
+  scene.add(halo);
+  const glowHaze = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  glowHaze.position.copy(halo.position);
+  scene.add(glowHaze);
   place(M.filterKit(), polar(deg(20), 3.3, FLOOR_H), 0.8, { id: "filter", label: "수은 욕조 거르기" }, 0.28);
 
   // gallery
@@ -491,6 +519,10 @@ export function buildWorld(scene) {
     windows: windowMats,
     lensLamp,
     flame: lens.userData.flame,
+    glass: lens.userData.glass,
+    halo,
+    glowHaze,
+    time: 0,
     beam,
     beamMat,
     beamSpots,
@@ -528,7 +560,7 @@ const smooth = (a, b, x) => {
 };
 
 // Sun arc from 06:00 to 18:00, dim moonlight at night; the lamp and its beam only when lit
-export function setTimeOfDay(world, hours, lampOn, rotating, dt, shutter = false) {
+export function setTimeOfDay(world, hours, lampOn, rotating, dt, shutter = false, viewPos = null) {
   const e = world.env;
   const arc = (Math.PI * (hours - 6)) / 12;
   const elev = Math.sin(arc);
@@ -546,8 +578,25 @@ export function setTimeOfDay(world, hours, lampOn, rotating, dt, shutter = false
   e.fog.near = (30 + 50 * (1 - dayF)) * fogScale;
   e.fog.far = (260 + 240 * (1 - dayF)) * fogScale;
   for (const m of e.windows) m.color.setScalar(0.15 + 0.85 * dayF);
-  e.lensLamp.intensity = lampOn ? 8 : 0;
   e.flame.visible = lampOn;
+  // the flame breathes a little
+  e.time += dt;
+  const flick = 0.92 + 0.05 * Math.sin(e.time * 13.7) + 0.03 * Math.sin(e.time * 29.3 + 1.1);
+  e.flame.scale.set(1, 0.9 + 0.15 * (flick - 0.92) / 0.08, 1);
+  e.lensLamp.intensity = lampOn ? 8 * flick : 0;
+  // a flash when one of the beams swings round to face the viewer
+  let flash = 0;
+  if (lampOn && !shutter && viewPos) {
+    const vx = viewPos.x;
+    const vz = viewPos.z;
+    const len = Math.hypot(vx, vz) || 1;
+    const align = Math.abs((Math.cos(e.beamAngle) * vx - Math.sin(e.beamAngle) * vz) / len);
+    flash = smooth(0.93, 0.995, align) * (1 - dayF * 0.7);
+  }
+  e.glass.emissiveIntensity = lampOn ? (0.35 + 0.9 * flash) * flick : 0;
+  e.halo.material.opacity = lampOn ? (0.55 + 0.45 * flash) * flick : 0;
+  e.glowHaze.material.opacity = lampOn ? (0.1 + 0.55 * flash) * (1 - dayF) : 0;
+  e.glowHaze.scale.setScalar(7 + 12 * flash);
   // the shutter blocks the light from reaching the sea; the flame keeps burning behind it
   e.beam.visible = lampOn && !shutter;
   for (const s of e.beamSpots) s.intensity = lampOn && !shutter ? 900 * (1 - dayF) : 0;
@@ -575,4 +624,23 @@ export function addSurvivorModel(world, scene, index, info) {
   world.interactables.push(p);
   world.survivorModels.push(p);
   OBSTACLES.push({ x: p.position.x, z: p.position.z, r: 0.3, upper: false });
+}
+
+// warm radial glow used for the lamp's halo
+let glowTex = null;
+function glowTexture() {
+  if (glowTex) return glowTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, "rgba(255,200,120,1)");
+  grad.addColorStop(0.25, "rgba(255,160,70,0.55)");
+  grad.addColorStop(0.6, "rgba(255,130,50,0.12)");
+  grad.addColorStop(1, "rgba(255,120,40,0)");
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  glowTex = new THREE.CanvasTexture(c);
+  glowTex.colorSpace = THREE.SRGBColorSpace;
+  return glowTex;
 }

@@ -65,6 +65,10 @@ export function lensAssembly() {
   lens.position.y = 1.17;
   lens.userData.noShadow = true;
   g.add(lens);
+  // when the lamp burns the prisms catch its light; the world drives this emissive glow
+  lens.material.emissive.setRGB(1.0, 0.6, 0.25);
+  lens.material.emissiveIntensity = 0;
+  g.userData.glass = lens.material;
   for (const y of [0.05, 0.4, 0.9, 1.25]) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(rAt(y) + 0.04, 0.014, 4, 16), BRASS);
     ring.rotation.x = Math.PI / 2;

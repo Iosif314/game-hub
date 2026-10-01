@@ -536,7 +536,7 @@ function enterScope() {
   crosshairEl.style.display = "none";
   postUniforms.exposure.value = 1.7;
   // the beam's haze would wash out the boosted eyepiece view whenever it sweeps past
-  world.env.beamMat.opacity = 0.06;
+  world.env.beamMat.uniforms.strength.value = 0.07;
   renderSignal();
 }
 function exitScope() {
@@ -546,7 +546,7 @@ function exitScope() {
   crosshairEl.style.display = "";
   menuEl.classList.add("hidden");
   postUniforms.exposure.value = 1.15;
-  world.env.beamMat.opacity = 0.16;
+  world.env.beamMat.uniforms.strength.value = 0.22;
   camera.fov = 70;
   camera.updateProjectionMatrix();
   if (mode === "scope") mode = "play";
@@ -801,7 +801,7 @@ function update(dt, t) {
     night.update(dt);
     updateKnocks(dt);
   }
-  setTimeOfDay(world, game.visualHours, game.state.lampOn, game.rotating, dt, game.state.phase === "night" && night.shutter);
+  setTimeOfDay(world, game.visualHours, game.state.lampOn, game.rotating, dt, game.state.phase === "night" && night.shutter, camera.position);
   world.supply.crate.visible = game.supplyWaiting;
   world.supply.boat.visible = game.supplyBoatHere;
   if (reading && reading.kind === "radio") {
