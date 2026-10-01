@@ -31,6 +31,8 @@ export function createNight(scene, hooks) {
   const outcomes = [];
   const wrecks = [];
   let shutter = false;
+  // ships whose story is over but which are still on screen: sailing off, sinking or riding at anchor
+  const departing = [];
 
   function laneOf(spec) {
     const b = (spec.bearing / 180) * Math.PI;
@@ -80,6 +82,45 @@ export function createNight(scene, hooks) {
     const n = Math.max(min, Math.min(sv.max, min + Math.floor(Math.random() * (sv.max - min + 1)) - (stormy ? 1 : 0)));
     if (n > 0) wrecks.push({ from: cur.spec.name, n, desc: sv.desc, how, when: Math.random() < 0.5 ? "night" : "dawn" });
     hooks.toast(`${cur.spec.name} · 암초에 부딪혔다`);
+  }
+
+  // hand the current ship off to finish its exit on its own, so the next one can start sooner
+  function depart(kind) {
+    departing.push({ ship: cur.ship, lane: cur.lane, s: cur.s, kind, t: 0 });
+    cur = null;
+    gap = kind === "sink" ? 4 : 2;
+  }
+
+  function wreckNow(how) {
+    wreck(how);
+    finish("wrecked", how);
+    if (shutter) {
+      shutter = false;
+      hooks.toast("차광막을 다시 열었다");
+    }
+    depart("sink");
+  }
+
+  function updateDeparting(dt) {
+    for (let i = departing.length - 1; i >= 0; i--) {
+      const d = departing[i];
+      d.t += dt;
+      let done = false;
+      if (d.kind === "sail") {
+        d.s += 10 * dt;
+        d.ship.position.copy(d.lane.start).addScaledVector(d.lane.t, d.s);
+        done = d.t > 12;
+      } else if (d.kind === "sink") {
+        const body = d.ship.userData.body;
+        body.rotation.x = Math.min(0.6, d.t * 0.15);
+        body.position.y -= dt * 1.1;
+        done = d.t > 6;
+      } else done = d.t > 3; // detained ship riding at anchor, then out of sight
+      if (done) {
+        scene.remove(d.ship);
+        departing.splice(i, 1);
+      }
+    }
   }
 
   function advance(dist) {
@@ -147,12 +188,13 @@ export function createNight(scene, hooks) {
       } else {
         cur.decision = "stop-detain";
         finish("detained", "detain");
-        cur.state = "anchored";
-        gap = 5;
+        hooks.toast("배를 억류하고 본부에 알렸다");
+        depart("anchor");
       }
     },
     update(dt) {
       if (!ctx) return;
+      updateDeparting(dt);
       if (!cur) {
         if (!queue.length) return;
         gap -= dt;
@@ -169,7 +211,7 @@ export function createNight(scene, hooks) {
       if (cur.state === "approach") {
         advance(SPEED * dt);
         if (cur.spec.sinks && cur.s >= LANE - 30) {
-          wreck("sank");
+          wreckNow("sank");
           return;
         }
         // nobody decided: the ship sails on with whatever the light shows
@@ -181,46 +223,23 @@ export function createNight(scene, hooks) {
         advance(Math.min(SPEED * dt, Math.max(0, LANE - STOP_AT - cur.s)));
         if (cur.s >= LANE - STOP_AT - 0.01) cur.state = "stopped";
       } else if (cur.state === "guided") {
-        const before = cur.s;
-        advance(SPEED * 1.4 * dt);
-        if (before < LANE && cur.s >= LANE) {
-          if (cur.spec.sinks) return wreck("sank");
-          if (!lightOn()) return wreck(cur.decision === "shutter" ? "shutter" : "dark");
-          if (Math.random() < accidentChance()) return wreck("accident");
-        }
-        if (cur.s >= LANE * 2 - 1) {
+        // once committed the ship makes for the reef briskly: at most ~8 s however early the call was
+        if (cur.rush === undefined) cur.rush = Math.max(SPEED * 1.4, (LANE - cur.s) / 8);
+        advance(cur.rush * dt);
+        if (cur.s >= LANE) {
+          if (cur.spec.sinks) return wreckNow("sank");
+          if (!lightOn()) return wreckNow(cur.decision === "shutter" ? "shutter" : "dark");
+          if (Math.random() < accidentChance()) return wreckNow("accident");
           finish("passed", cur.decision);
-          scene.remove(ship);
-          cur = null;
-          gap = 4;
-        }
-      } else if (cur.state === "wrecking") {
-        cur.sink += dt;
-        const body = ship.userData.body;
-        body.rotation.x = Math.min(0.5, cur.sink * 0.08);
-        body.position.y -= dt * 0.6;
-        if (cur.sink > 9) {
-          finish("wrecked", cur.wreckHow);
-          scene.remove(ship);
-          cur = null;
-          gap = 5;
-          if (shutter) {
-            shutter = false;
-            hooks.toast("차광막을 다시 열었다");
-          }
-        }
-      } else if (cur.state === "anchored") {
-        gap -= dt;
-        if (gap <= 0) {
-          cur.ship.visible = false;
-          scene.remove(ship);
-          cur = null;
-          gap = 3;
+          hooks.toast("배가 암초를 지나 멀어진다");
+          depart("sail");
         }
       }
     },
     // N during the night: let whatever is left play out by default
     resolveRest() {
+      for (const d of departing) scene.remove(d.ship);
+      departing.length = 0;
       const rest = [];
       if (cur && (cur.state === "approach" || cur.state === "guided" || cur.state === "stopping" || cur.state === "stopped")) rest.push(cur);
       else if (cur && cur.state === "wrecking") {
