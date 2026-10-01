@@ -354,7 +354,9 @@ export function buildWorld(scene) {
       void main() {
         // brightest through the middle, but never fully dark at the outline (that read as a seam)
         float core = 0.35 + 0.65 * pow(abs(dot(normalize(vN), normalize(vV))), 2.0);
-        float fade = pow(1.0 - vAlong, 2.6);
+        // clamp first: at the cone's rim 1 - vAlong can dip just below zero, and pow() of a negative
+        // number is NaN, which came out of the post pass as a black ring
+        float fade = pow(max(0.0, 1.0 - vAlong), 2.6);
         gl_FragColor = vec4(vec3(1.0, 0.98, 0.94), strength * core * fade);
       }`,
     transparent: true,
