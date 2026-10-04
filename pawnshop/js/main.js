@@ -233,6 +233,11 @@ let menuSeq = 0;
 function talkMenu(v, prompt, actions) {
   const p = PEOPLE[v.who];
   const hist = (S.talks[v.who] = S.talks[v.who] || []);
+  // what they said on coming to the grille is where the conversation starts
+  if (!v.seeded) {
+    v.seeded = true;
+    for (const line of v.intro || []) hist.push({ who: "them", text: line });
+  }
   const id = ++menuSeq;
   v.menu = id;
   const live = () => v.menu === id;
