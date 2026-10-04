@@ -205,81 +205,128 @@ function withAsks(v, name, rest) {
     }));
 }
 
-// --- free talk through the grille: the backend holds each customer's story, secrets and lies ---
+// --- talking through the grille: the backend plays the customer (it holds their story, secrets and
+// lies) and offers three things I could say next; I only choose ---
 const TALK_API = "https://interrogation-room-rqxc.onrender.com/pawnshop/api/talk";
 const TALK_FALLBACK = ["……(대답 대신 창살 너머로 눈길을 돌린다)", "……그건 말하고 싶지 않소.", "(입을 다물고 바닥만 본다)"];
 
-const talkOption = (v, back) => ({ label: "직접 말을 건다", fn: () => freeTalk(v, back) });
+const talkOption = (v, back) => ({ label: "말을 건다", fn: () => freeTalk(v, back) });
+
+async function talkRequest(v, message) {
+  const hist = S.talks[v.who] || [];
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 60000); // the free server can take most of a minute to wake
+  try {
+    const res = await fetch(TALK_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: v.who,
+        message,
+        day: S.day,
+        history: hist.filter((t) => !t.offline).slice(-14),
+        pawned: S.jars.filter((j) => j.owner === v.who).map((j) => ({ emotion: j.emotion, amount: j.amount })),
+      }),
+      signal: ctl.signal,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function freeTalk(v, back) {
   const p = PEOPLE[v.who];
   const hist = (S.talks[v.who] = S.talks[v.who] || []);
-  dlg.classList.remove("hidden");
-  dName.textContent = p.name;
-  dText.textContent = "(무엇을 물을까?)";
-  dText.classList.remove("more");
-  talk = null;
-  dChoices.innerHTML = `<input class="say" maxlength="200" autocomplete="off" placeholder="할 말을 쓰고 Enter" /><button class="send">말하기</button><button class="stop">그만한다</button>`;
-  const input = dChoices.querySelector(".say");
-  const sendBtn = dChoices.querySelector(".send");
-  let busy = false;
-  async function send() {
-    const text = input.value.trim();
-    if (!text || busy) return;
-    busy = true;
-    input.value = "";
-    sendBtn.disabled = true;
-    dText.innerHTML = `<div class="me">나: ${esc(text)}</div><div class="waiting">……</div>`;
-    let reply = null;
+  let open = true;
+  let lastMine = "";
+
+  function show(replyText) {
+    dlg.classList.remove("hidden");
+    dName.textContent = p.name;
+    dText.classList.remove("more");
+    talk = null;
+    dText.innerHTML = lastMine ? `<div class="me">나: ${esc(lastMine)}</div><div>${esc(replyText)}</div>` : `<div class="me">(무슨 말을 할까?)</div>`;
+  }
+
+  function waiting() {
+    dChoices.innerHTML = "";
+    dText.innerHTML = `${lastMine ? `<div class="me">나: ${esc(lastMine)}</div>` : ""}<div class="waiting">……</div>`;
+    const stop = document.createElement("button");
+    stop.textContent = "그만한다";
+    stop.addEventListener("click", (e) => {
+      e.stopPropagation();
+      end();
+    });
+    dChoices.appendChild(stop);
+  }
+
+  // when the server does not answer, the fixed questions of this visit stand in for its lines
+  function fallbackLines() {
+    v.asked = v.asked || new Set();
+    return (v.ask || []).filter(([q]) => !v.asked.has(q)).map(([q, a]) => ({ text: q, answer: a, q }));
+  }
+
+  function offer(lines) {
+    if (!open) return;
+    choose(
+      null,
+      lines
+        .map((l) => ({ label: l.text, fn: () => (l.answer !== undefined ? answerLocally(l) : say_(l.text)) }))
+        .concat([{ label: "그만한다", fn: end }]),
+      p.name,
+    );
+    dText.classList.remove("more");
+  }
+
+  function answerLocally(l) {
+    v.asked.add(l.q);
+    lastMine = l.text;
+    hist.push({ who: "keeper", text: l.text, offline: true }, { who: "them", text: l.answer, offline: true });
+    show(l.answer);
+    offer(fallbackLines());
+  }
+
+  async function say_(text) {
+    lastMine = text;
+    waiting();
+    let data = null;
     try {
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), 60000); // the free server can take most of a minute to wake
-      const res = await fetch(TALK_API, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: v.who,
-          message: text,
-          day: S.day,
-          history: hist.filter((t) => !t.offline).slice(-14),
-          pawned: S.jars.filter((j) => j.owner === v.who).map((j) => ({ emotion: j.emotion, amount: j.amount })),
-        }),
-        signal: ctl.signal,
-      });
-      clearTimeout(timer);
-      const data = await res.json();
-      if (!res.ok || !data.reply) throw new Error(data.error || `HTTP ${res.status}`);
-      reply = { who: "them", text: data.reply };
+      data = await talkRequest(v, text);
     } catch (e) {
       console.warn("customer talk failed", e);
-      reply = { who: "them", text: TALK_FALLBACK[Math.floor(Math.random() * TALK_FALLBACK.length)], offline: true };
     }
-    hist.push({ who: "keeper", text }, reply);
-    busy = false;
-    if (!dChoices.contains(input)) return; // the player stopped talking while waiting
-    sendBtn.disabled = false;
-    dText.innerHTML = `<div class="me">나: ${esc(text)}</div><div>${esc(reply.text)}</div>`;
-    input.focus();
+    if (!open) return;
+    const reply = data && data.reply ? data.reply : TALK_FALLBACK[Math.floor(Math.random() * TALK_FALLBACK.length)];
+    hist.push({ who: "keeper", text }, { who: "them", text: reply, offline: !(data && data.reply) });
+    show(reply);
+    offer(data && data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines());
   }
-  input.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    if (e.key === "Enter" && !e.isComposing) {
-      e.preventDefault();
-      send();
-    }
-  });
-  sendBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    send();
-  });
-  dChoices.querySelector(".stop").addEventListener("click", (e) => {
-    e.stopPropagation();
+
+  function end() {
+    open = false;
     sfx.click();
     dChoices.innerHTML = "";
     back();
-  });
-  input.addEventListener("click", (e) => e.stopPropagation());
-  input.focus();
+  }
+
+  // the opening: no reply yet, just the first things I could say
+  show("");
+  waiting();
+  talkRequest(v, "")
+    .then((data) => {
+      if (!open) return;
+      show("");
+      offer(data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines());
+    })
+    .catch((e) => {
+      console.warn("customer talk failed", e);
+      if (!open) return;
+      show("");
+      offer(fallbackLines());
+    });
 }
 
 function pawnFlow(v) {
