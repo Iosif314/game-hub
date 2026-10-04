@@ -196,6 +196,22 @@ const remaining = (who, emo) => (S.reserve[who] && S.reserve[who][emo]) || 0;
 const TALK_API = "https://interrogation-room-rqxc.onrender.com/pawnshop/api/talk";
 const TALK_FALLBACK = ["……(대답 대신 창살 너머로 눈길을 돌린다)", "……그건 말하고 싶지 않소.", "(입을 다물고 바닥만 본다)"];
 
+// today's terms, so the customer quotes them instead of inventing numbers
+function dealOf(v) {
+  if (v.kind === "pawn" || v.kind === "last") {
+    const amount = v.kind === "last" ? remaining(v.who, v.offer.emotion) : v.offer.amount;
+    return { kind: "pawn", emotion: v.offer.emotion, amount, money: v.offer.loan };
+  }
+  if (v.kind === "buy") return { kind: "buy", emotion: v.wants, money: v.price };
+  if (v.kind === "sell") return { kind: "sell", emotion: v.offer.emotion, amount: v.offer.amount, money: v.offer.price };
+  if (v.kind === "redeem") {
+    const j = jarOf(v.who);
+    return j ? { kind: "redeem", emotion: j.emotion, money: Math.round(j.pawn.loan * (1 + j.pawn.rate / 100)) } : null;
+  }
+  if (v.kind === "blackmail") return { kind: "blackmail" };
+  return null;
+}
+
 async function talkRequest(v, message) {
   const hist = S.talks[v.who] || [];
   const ctl = new AbortController();
@@ -210,6 +226,7 @@ async function talkRequest(v, message) {
         day: S.day,
         history: hist.filter((t) => !t.offline).slice(-14),
         pawned: S.jars.filter((j) => j.owner === v.who).map((j) => ({ emotion: j.emotion, amount: j.amount })),
+        deal: dealOf(v),
       }),
       signal: ctl.signal,
     });
