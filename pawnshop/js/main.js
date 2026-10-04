@@ -191,26 +191,10 @@ function nextVisit() {
 const jarOf = (who) => S.jars.find((j) => j.owner === who);
 const remaining = (who, emo) => (S.reserve[who] && S.reserve[who][emo]) || 0;
 
-// a question menu shared by every visit: each question can be asked once
-function withAsks(v, name, rest) {
-  v.asked = v.asked || new Set();
-  return (v.ask || [])
-    .filter(([q]) => !v.asked.has(q))
-    .map(([q, a]) => ({
-      label: q,
-      fn: () => {
-        v.asked.add(q);
-        say(name, [a], rest);
-      },
-    }));
-}
-
 // --- talking through the grille: the backend plays the customer (it holds their story, secrets and
-// lies) and offers three things I could say next; I only choose ---
+// lies) and offers three things I could say next. They sit in the visit's menu next to the deal itself.
 const TALK_API = "https://interrogation-room-rqxc.onrender.com/pawnshop/api/talk";
 const TALK_FALLBACK = ["……(대답 대신 창살 너머로 눈길을 돌린다)", "……그건 말하고 싶지 않소.", "(입을 다물고 바닥만 본다)"];
-
-const talkOption = (v, back) => ({ label: "말을 건다", fn: () => freeTalk(v, back) });
 
 async function talkRequest(v, message) {
   const hist = S.talks[v.who] || [];
@@ -237,96 +221,117 @@ async function talkRequest(v, message) {
   }
 }
 
-function freeTalk(v, back) {
+// when the server does not answer, the visit's fixed questions stand in, answered from the script
+function fallbackLines(v) {
+  v.asked = v.asked || new Set();
+  return (v.ask || []).filter(([q]) => !v.asked.has(q)).map(([q, a]) => ({ text: q, answer: a }));
+}
+
+let menuSeq = 0;
+
+// the visit's menu: three things to say (from the server) and the deal's own actions
+function talkMenu(v, prompt, actions) {
   const p = PEOPLE[v.who];
   const hist = (S.talks[v.who] = S.talks[v.who] || []);
-  let open = true;
-  let lastMine = "";
+  const id = ++menuSeq;
+  v.menu = id;
+  const live = () => v.menu === id;
+  // replies that arrive later redraw whichever menu of this visit is open by then
+  v.render = render;
+  const redraw = () => v.menu && v.render && v.render();
 
-  function show(replyText) {
+  function render() {
+    if (!live()) return;
     dlg.classList.remove("hidden");
     dName.textContent = p.name;
-    dText.classList.remove("more");
     talk = null;
-    dText.innerHTML = lastMine ? `<div class="me">나: ${esc(lastMine)}</div><div>${esc(replyText)}</div>` : `<div class="me">(무슨 말을 할까?)</div>`;
-  }
-
-  function waiting() {
-    dChoices.innerHTML = "";
-    dText.innerHTML = `${lastMine ? `<div class="me">나: ${esc(lastMine)}</div>` : ""}<div class="waiting">……</div>`;
-    const stop = document.createElement("button");
-    stop.textContent = "그만한다";
-    stop.addEventListener("click", (e) => {
-      e.stopPropagation();
-      end();
-    });
-    dChoices.appendChild(stop);
-  }
-
-  // when the server does not answer, the fixed questions of this visit stand in for its lines
-  function fallbackLines() {
-    v.asked = v.asked || new Set();
-    return (v.ask || []).filter(([q]) => !v.asked.has(q)).map(([q, a]) => ({ text: q, answer: a, q }));
-  }
-
-  function offer(lines) {
-    if (!open) return;
-    choose(
-      null,
-      lines
-        .map((l) => ({ label: l.text, fn: () => (l.answer !== undefined ? answerLocally(l) : say_(l.text)) }))
-        .concat([{ label: "그만한다", fn: end }]),
-      p.name,
-    );
     dText.classList.remove("more");
-  }
-
-  function answerLocally(l) {
-    v.asked.add(l.q);
-    lastMine = l.text;
-    hist.push({ who: "keeper", text: l.text, offline: true }, { who: "them", text: l.answer, offline: true });
-    show(l.answer);
-    offer(fallbackLines());
-  }
-
-  async function say_(text) {
-    lastMine = text;
-    waiting();
-    let data = null;
-    try {
-      data = await talkRequest(v, text);
-    } catch (e) {
-      console.warn("customer talk failed", e);
-    }
-    if (!open) return;
-    const reply = data && data.reply ? data.reply : TALK_FALLBACK[Math.floor(Math.random() * TALK_FALLBACK.length)];
-    hist.push({ who: "keeper", text }, { who: "them", text: reply, offline: !(data && data.reply) });
-    show(reply);
-    offer(data && data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines());
-  }
-
-  function end() {
-    open = false;
-    sfx.click();
+    const conv = v.last
+      ? `<div class="me">나: ${esc(v.last.mine)}</div><div>${v.last.reply === null ? '<span class="waiting">……</span>' : esc(v.last.reply)}</div>`
+      : "";
+    dText.innerHTML = `${conv}<div class="deal">${esc(prompt)}</div>`;
     dChoices.innerHTML = "";
-    back();
+    if (v.busy || !v.lines) {
+      const wait = document.createElement("button");
+      wait.className = "say-line";
+      wait.textContent = "……";
+      wait.disabled = true;
+      dChoices.appendChild(wait);
+    } else {
+      for (const line of v.lines) {
+        const btn = document.createElement("button");
+        btn.className = "say-line";
+        btn.textContent = `“${line.text}”`;
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          sfx.click();
+          speak(line);
+        });
+        dChoices.appendChild(btn);
+      }
+    }
+    for (const a of actions) {
+      const btn = document.createElement("button");
+      btn.textContent = a.label + (a.note ? `  (${a.note})` : "");
+      btn.disabled = !!a.disabled;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        sfx.click();
+        v.menu = 0; // leaving this menu: late replies must not redraw it
+        dChoices.innerHTML = "";
+        a.fn();
+      });
+      dChoices.appendChild(btn);
+    }
   }
 
-  // the opening: no reply yet, just the first things I could say
-  show("");
-  waiting();
-  talkRequest(v, "")
-    .then((data) => {
-      if (!open) return;
-      show("");
-      offer(data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines());
-    })
-    .catch((e) => {
-      console.warn("customer talk failed", e);
-      if (!open) return;
-      show("");
-      offer(fallbackLines());
-    });
+  function speak(line) {
+    if (line.answer !== undefined) {
+      v.asked.add(line.text);
+      v.last = { mine: line.text, reply: line.answer };
+      hist.push({ who: "keeper", text: line.text, offline: true }, { who: "them", text: line.answer, offline: true });
+      v.lines = fallbackLines(v);
+      redraw();
+      return;
+    }
+    v.last = { mine: line.text, reply: null };
+    v.busy = true;
+    redraw();
+    talkRequest(v, line.text)
+      .then((data) => {
+        v.last.reply = data.reply || TALK_FALLBACK[0];
+        hist.push({ who: "keeper", text: line.text }, { who: "them", text: v.last.reply });
+        v.lines = data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines(v);
+      })
+      .catch((e) => {
+        console.warn("customer talk failed", e);
+        v.last.reply = TALK_FALLBACK[Math.floor(Math.random() * TALK_FALLBACK.length)];
+        hist.push({ who: "keeper", text: line.text, offline: true }, { who: "them", text: v.last.reply, offline: true });
+        v.lines = fallbackLines(v);
+      })
+      .finally(() => {
+        v.busy = false;
+        redraw();
+      });
+  }
+
+  // the first lines are fetched once per visit and kept while the menu comes and goes
+  if (!v.lines && !v.busy) {
+    v.busy = true;
+    talkRequest(v, "")
+      .then((data) => {
+        v.lines = data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines(v);
+      })
+      .catch((e) => {
+        console.warn("customer talk failed", e);
+        v.lines = fallbackLines(v);
+      })
+      .finally(() => {
+        v.busy = false;
+        redraw();
+      });
+  }
+  render();
 }
 
 function pawnFlow(v) {
@@ -339,11 +344,9 @@ function pawnMenu(v) {
   const o = v.offer;
   const amount = v.kind === "last" ? remaining(v.who, o.emotion) : o.amount;
   const emo = EMOTIONS[o.emotion].name;
-  choose(
+  talkMenu(v,
     `${emo} ${amount}할을 맡기고 ${o.loan}실링을 빌리려 한다.`,
     [
-      ...withAsks(v, p.name, () => pawnMenu(v)),
-      talkOption(v, () => pawnMenu(v)),
       { label: "맡는다", disabled: S.cash < o.loan, note: S.cash < o.loan ? "돈이 모자라다" : "", fn: () => interestMenu(v, amount) },
       { label: "돌려보낸다", fn: () => refuse(v) },
     ],
@@ -407,11 +410,9 @@ function buyFlow(v) {
 
 function buyMenu(v) {
   const p = PEOPLE[v.who];
-  choose(
+  talkMenu(v,
     `${EMOTIONS[v.wants].name}을(를) 원한다. 1할에 ${v.price}실링.`,
     [
-      ...withAsks(v, p.name, () => buyMenu(v)),
-      talkOption(v, () => buyMenu(v)),
       {
         label: "저장고에서 병을 고른다",
         fn: () => {
@@ -496,10 +497,9 @@ function redeemFlow(v) {
 
 function redeemMenu(v, pay) {
   const p = PEOPLE[v.who];
-  choose(
+  talkMenu(v,
     `${pay}실링을 내밀고 기다린다.`,
     [
-      talkOption(v, () => redeemMenu(v, pay)),
       {
         label: "병을 가져온다",
         fn: () => {
@@ -543,11 +543,9 @@ function sellFlow(v) {
 function sellMenu(v) {
   const p = PEOPLE[v.who];
   const o = v.offer;
-  choose(
+  talkMenu(v,
     `${PEOPLE[v.sitter].name}의 ${EMOTIONS[o.emotion].name} ${o.amount}할을 ${o.price}실링에 사 달라고 한다.`,
     [
-      ...withAsks(v, p.name, () => sellMenu(v)),
-      talkOption(v, () => sellMenu(v)),
       {
         label: "산다",
         disabled: S.cash < o.price,
@@ -583,10 +581,9 @@ function blackmailFlow(v) {
 
 function blackmailMenu(v) {
   const p = PEOPLE[v.who];
-  choose(
+  talkMenu(v,
     "병을 넘기라고 한다.",
     [
-      talkOption(v, () => blackmailMenu(v)),
       {
         label: "병을 넘긴다",
         fn: () => {

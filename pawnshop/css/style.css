@@ -198,3 +198,5 @@ button:disabled { opacity: 0.4; cursor: default; }
 #panel.night-panel .btns { justify-content: center; }
 #dialog .text .me { color: var(--paper-dim); font-size: 0.9em; }
 #dialog .text .waiting { opacity: 0.5; animation: blink 1s steps(2) infinite; }
+#dialog .text .deal { margin-top: 4px; font-size: 0.85em; color: var(--paper-dim); }
+#dialog .say-line { border-style: dashed; text-align: left; }
