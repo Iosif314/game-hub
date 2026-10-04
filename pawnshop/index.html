@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>감정 전당포 · 시험판</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.39.3/dist/galmuri.css" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="hud"></div>
+    <div id="tip"></div>
+    <div id="dialog" class="hidden">
+      <div class="name"></div>
+      <div class="text"></div>
+      <div class="choices"></div>
+    </div>
+    <div id="panel" class="hidden"></div>
+    <div id="label-tip" class="hidden"></div>
+    <div id="overlay">
+      <h1>감정 전당포</h1>
+      <div class="sub">시험판 · 사흘</div>
+      <div class="warn">피와 비명이 나오는 잔혹한 장면이 있습니다. 소리를 켜고 하세요.</div>
+      <table class="keys">
+        <tr><td>대화 넘기기</td><td>클릭 · Space</td></tr>
+        <tr><td>발전기 돌리기</td><td>Space 또는 마우스를 누르고 있기</td></tr>
+        <tr><td>라벨 보기</td><td>저장고에서 병에 마우스 올리기</td></tr>
+      </table>
+      <div class="hint">클릭해서 시작</div>
+    </div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
