@@ -36,6 +36,7 @@ const S = {
   violations: 0,
   extractions: 0,
   flags: {},
+  talks: {}, // what has been said with each customer, kept across days
   queue: [],
   log: [],
 };
@@ -204,6 +205,83 @@ function withAsks(v, name, rest) {
     }));
 }
 
+// --- free talk through the grille: the backend holds each customer's story, secrets and lies ---
+const TALK_API = "https://interrogation-room-rqxc.onrender.com/pawnshop/api/talk";
+const TALK_FALLBACK = ["……(대답 대신 창살 너머로 눈길을 돌린다)", "……그건 말하고 싶지 않소.", "(입을 다물고 바닥만 본다)"];
+
+const talkOption = (v, back) => ({ label: "직접 말을 건다", fn: () => freeTalk(v, back) });
+
+function freeTalk(v, back) {
+  const p = PEOPLE[v.who];
+  const hist = (S.talks[v.who] = S.talks[v.who] || []);
+  dlg.classList.remove("hidden");
+  dName.textContent = p.name;
+  dText.textContent = "(무엇을 물을까?)";
+  dText.classList.remove("more");
+  talk = null;
+  dChoices.innerHTML = `<input class="say" maxlength="200" autocomplete="off" placeholder="할 말을 쓰고 Enter" /><button class="send">말하기</button><button class="stop">그만한다</button>`;
+  const input = dChoices.querySelector(".say");
+  const sendBtn = dChoices.querySelector(".send");
+  let busy = false;
+  async function send() {
+    const text = input.value.trim();
+    if (!text || busy) return;
+    busy = true;
+    input.value = "";
+    sendBtn.disabled = true;
+    dText.innerHTML = `<div class="me">나: ${esc(text)}</div><div class="waiting">……</div>`;
+    let reply = null;
+    try {
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 60000); // the free server can take most of a minute to wake
+      const res = await fetch(TALK_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: v.who,
+          message: text,
+          day: S.day,
+          history: hist.filter((t) => !t.offline).slice(-14),
+          pawned: S.jars.filter((j) => j.owner === v.who).map((j) => ({ emotion: j.emotion, amount: j.amount })),
+        }),
+        signal: ctl.signal,
+      });
+      clearTimeout(timer);
+      const data = await res.json();
+      if (!res.ok || !data.reply) throw new Error(data.error || `HTTP ${res.status}`);
+      reply = { who: "them", text: data.reply };
+    } catch (e) {
+      console.warn("customer talk failed", e);
+      reply = { who: "them", text: TALK_FALLBACK[Math.floor(Math.random() * TALK_FALLBACK.length)], offline: true };
+    }
+    hist.push({ who: "keeper", text }, reply);
+    busy = false;
+    if (!dChoices.contains(input)) return; // the player stopped talking while waiting
+    sendBtn.disabled = false;
+    dText.innerHTML = `<div class="me">나: ${esc(text)}</div><div>${esc(reply.text)}</div>`;
+    input.focus();
+  }
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      send();
+    }
+  });
+  sendBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    send();
+  });
+  dChoices.querySelector(".stop").addEventListener("click", (e) => {
+    e.stopPropagation();
+    sfx.click();
+    dChoices.innerHTML = "";
+    back();
+  });
+  input.addEventListener("click", (e) => e.stopPropagation());
+  input.focus();
+}
+
 function pawnFlow(v) {
   const p = PEOPLE[v.who];
   say(p.name, v.intro, () => pawnMenu(v));
@@ -218,6 +296,7 @@ function pawnMenu(v) {
     `${emo} ${amount}할을 맡기고 ${o.loan}실링을 빌리려 한다.`,
     [
       ...withAsks(v, p.name, () => pawnMenu(v)),
+      talkOption(v, () => pawnMenu(v)),
       { label: "맡는다", disabled: S.cash < o.loan, note: S.cash < o.loan ? "돈이 모자라다" : "", fn: () => interestMenu(v, amount) },
       { label: "돌려보낸다", fn: () => refuse(v) },
     ],
@@ -285,6 +364,7 @@ function buyMenu(v) {
     `${EMOTIONS[v.wants].name}을(를) 원한다. 1할에 ${v.price}실링.`,
     [
       ...withAsks(v, p.name, () => buyMenu(v)),
+      talkOption(v, () => buyMenu(v)),
       {
         label: "저장고에서 병을 고른다",
         fn: () => {
@@ -364,43 +444,47 @@ function redeemFlow(v) {
     });
     return;
   }
-  say(p.name, v.intro.concat([`(${pay}실링을 내민다)`]), () =>
-    choose(
-      null,
-      [
-        {
-          label: "병을 가져온다",
-          fn: () => {
-            hideDialog();
-            go(
-              cellarScene({
-                title: `${p.name}의 병을 고른다`,
-                pick: (jar) => {
-                  if (jar.mine) {
-                    go(counter);
-                    return say("", ["이건 내 것이다."], () => redeemFlow(v));
-                  }
-                  S.cash += pay;
-                  sfx.coins(4);
-                  hud();
-                  removeJar(jar);
-                  const right = jar.owner === v.who;
-                  S.flags.tom = right ? "right" : "wrong";
-                  note(`${p.name}이(가) ${pay}실링을 갚고 병을 찾아갔다${right ? "" : " (다른 사람의 병)"}`);
-                  const after = right ? v.after : v.wrong[jar.emotion] || v.wrong.default;
-                  go(chairScene({ mode: "inject", who: v.who, emotion: jar.emotion, amount: jar.amount, done: (res) => afterChair({ ...v, after }, res, toCounterNext) }));
-                },
-                back: () => {
+  say(p.name, v.intro.concat([`(${pay}실링을 내민다)`]), () => redeemMenu(v, pay));
+}
+
+function redeemMenu(v, pay) {
+  const p = PEOPLE[v.who];
+  choose(
+    `${pay}실링을 내밀고 기다린다.`,
+    [
+      talkOption(v, () => redeemMenu(v, pay)),
+      {
+        label: "병을 가져온다",
+        fn: () => {
+          hideDialog();
+          go(
+            cellarScene({
+              title: `${p.name}의 병을 고른다`,
+              pick: (jar) => {
+                if (jar.mine) {
                   go(counter);
-                  redeemFlow(v);
-                },
-              }),
-            );
-          },
+                  return say("", ["이건 내 것이다."], () => redeemMenu(v, pay));
+                }
+                S.cash += pay;
+                sfx.coins(4);
+                hud();
+                removeJar(jar);
+                const right = jar.owner === v.who;
+                S.flags.tom = right ? "right" : "wrong";
+                note(`${p.name}이(가) ${pay}실링을 갚고 병을 찾아갔다${right ? "" : " (다른 사람의 병)"}`);
+                const after = right ? v.after : v.wrong[jar.emotion] || v.wrong.default;
+                go(chairScene({ mode: "inject", who: v.who, emotion: jar.emotion, amount: jar.amount, done: (res) => afterChair({ ...v, after }, res, toCounterNext) }));
+              },
+              back: () => {
+                go(counter);
+                redeemMenu(v, pay);
+              },
+            }),
+          );
         },
-      ],
-      p.name,
-    ),
+      },
+    ],
+    p.name,
   );
 }
 
@@ -416,6 +500,7 @@ function sellMenu(v) {
     `${PEOPLE[v.sitter].name}의 ${EMOTIONS[o.emotion].name} ${o.amount}할을 ${o.price}실링에 사 달라고 한다.`,
     [
       ...withAsks(v, p.name, () => sellMenu(v)),
+      talkOption(v, () => sellMenu(v)),
       {
         label: "산다",
         disabled: S.cash < o.price,
@@ -446,35 +531,39 @@ function sellMenu(v) {
 
 function blackmailFlow(v) {
   const p = PEOPLE[v.who];
-  say(p.name, v.intro, () =>
-    choose(
-      null,
-      [
-        {
-          label: "병을 넘긴다",
-          fn: () => {
-            removeJar(jarOf(v.needs));
-            note(`넬리의 병을 아버지에게 넘겼다`);
-            say(p.name, [v.give], () => {
-              counter.cust = null;
-              setTimeout(nextVisit, 500);
-            });
-          },
+  say(p.name, v.intro, () => blackmailMenu(v));
+}
+
+function blackmailMenu(v) {
+  const p = PEOPLE[v.who];
+  choose(
+    "병을 넘기라고 한다.",
+    [
+      talkOption(v, () => blackmailMenu(v)),
+      {
+        label: "병을 넘긴다",
+        fn: () => {
+          removeJar(jarOf(v.needs));
+          note(`넬리의 병을 아버지에게 넘겼다`);
+          say(p.name, [v.give], () => {
+            counter.cust = null;
+            setTimeout(nextVisit, 500);
+          });
         },
-        {
-          label: "거절한다",
-          fn: () => {
-            S.flags.reported = true;
-            note(`넬리의 아버지를 돌려보냈다`);
-            say(p.name, [v.refuse], () => {
-              counter.cust = null;
-              setTimeout(nextVisit, 500);
-            });
-          },
+      },
+      {
+        label: "거절한다",
+        fn: () => {
+          S.flags.reported = true;
+          note(`넬리의 아버지를 돌려보냈다`);
+          say(p.name, [v.refuse], () => {
+            counter.cust = null;
+            setTimeout(nextVisit, 500);
+          });
         },
-      ],
-      p.name,
-    ),
+      },
+    ],
+    p.name,
   );
 }
 

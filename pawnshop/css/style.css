@@ -196,3 +196,17 @@ button:disabled { opacity: 0.4; cursor: default; }
 #overlay .keys td:first-child { color: var(--paper-dim); text-align: right; }
 #overlay .hint { margin-top: 18px; animation: blink 1.4s steps(2) infinite; }
 #panel.night-panel .btns { justify-content: center; }
+#dialog .text .me { color: var(--paper-dim); font-size: 0.9em; }
+#dialog .text .waiting { opacity: 0.5; animation: blink 1s steps(2) infinite; }
+#dialog .say {
+  flex: 1 1 60%;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.92em;
+  color: var(--paper);
+  background: #0e0b09;
+  border: 1px solid var(--paper-dim);
+  padding: 4px 8px;
+  outline: none;
+}
+#dialog .say:focus { border-color: var(--paper); }
