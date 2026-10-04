@@ -3,6 +3,7 @@ import { buildWorld, animateWorld, setTimeOfDay, addSurvivorModel, groundAt, blo
 import { createNight } from "./night.js";
 import { createGame, TASKS, DAYS } from "./game.js";
 import { createCloseup } from "./closeup.js";
+import { stageOf, bend, bends, hearRadio, hearLine, segHtml, createGlimpses } from "./mind.js";
 
 // mosaic grid; the scene is rendered SS× larger and averaged down per block
 const W = 288;
@@ -125,6 +126,8 @@ let mode = "menu";
 let debugOn = false;
 
 const closeup = createCloseup($("closeup"), $("closeup-help"));
+const glimpses = createGlimpses();
+const stage = () => stageOf(mercury);
 
 // unadjustedMovement skips OS acceleration and avoids Chrome's occasional bogus movement spikes
 function lockPointer() {
@@ -187,6 +190,12 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (reading) {
+    // while talking, keys belong to the text box; this only catches them when it has lost focus
+    if (reading.kind === "talk") {
+      if (e.code === "Escape") closePaper();
+      else paperEl.querySelector(".say")?.focus();
+      return;
+    }
     if (reading.kind === "door" && (e.code === "Digit1" || e.code === "Digit2")) answerDoor(e.code === "Digit1");
     else if (e.code === "Space") {
       e.preventDefault();
@@ -225,6 +234,9 @@ document.addEventListener("wheel", (e) => {
 slider.addEventListener("input", () => {
   mercury = Number(slider.value);
 });
+$("glimpse-len").addEventListener("change", (e) => {
+  glimpses.lengthen = Number(e.target.value);
+});
 
 // --- interaction ---
 const raycaster = new THREE.Raycaster();
@@ -233,7 +245,6 @@ const center = new THREE.Vector2(0, 0);
 let target = null;
 
 const NOT_YET = {
-  survivor: "……  (생존자 대화는 4단계에서)",
   telescope: "망원경 · 밤의 배 판단은 다음 단계에서",
 };
 
@@ -246,6 +257,7 @@ function toast(text) {
 // --- day structure and maintenance ---
 const game = createGame({
   toast,
+  stage: () => stage(),
   expose(amount) {
     mercury = Math.max(0, Math.min(100, mercury + amount));
   },
@@ -368,8 +380,10 @@ function closePaper() {
   else showMenu("클릭해서 계속");
 }
 
-function radioLineHtml([who, text]) {
-  return `<div class="line">${who ? `<span class="who">${esc(who)}</span>` : ""}<span>${esc(text)}</span></div>`;
+// a line as heard: the speaker and the words may both be bent
+function radioLineHtml(h, key) {
+  const who = h.whoReal ? segHtml([{ t: h.who, real: h.whoReal }], `${key}:who`) : esc(h.who || "");
+  return `<div class="line">${h.who ? `<span class="who">${who}</span>` : ""}<span>${segHtml(h.segs, key)}</span></div>`;
 }
 
 function openRadio() {
@@ -379,7 +393,7 @@ function openRadio() {
     return;
   }
   openPaper("radio", `<div class="head">무전 · ${game.state.day}일차 낮</div><div class="body"></div><div class="foot">Space 다음 · E 닫기</div>`, {
-    lines,
+    lines: hearRadio(lines, game.state.day, stage()),
     shown: 0,
     timer: 0,
   });
@@ -388,20 +402,16 @@ function openRadio() {
 
 function advanceRadio() {
   if (!reading || reading.kind !== "radio" || reading.shown >= reading.lines.length) return;
-  paperEl.querySelector(".body").insertAdjacentHTML("beforeend", radioLineHtml(reading.lines[reading.shown]));
+  paperEl.querySelector(".body").insertAdjacentHTML("beforeend", radioLineHtml(reading.lines[reading.shown], `radio:${game.state.day}:${reading.shown}`));
   reading.shown++;
   reading.timer = 0;
   if (reading.shown >= reading.lines.length) paperEl.querySelector(".foot").textContent = "교신이 끊겼다 · E 닫기";
 }
 
-function openTape() {
-  const w = game.readTape();
-  if (!w) {
-    toast(game.state.phase === "dusk" ? "해 질 녘 일정을 마치면 전신이 온다" : "전신기가 조용하다");
-    return;
-  }
+// the tape is a machine record: it is never bent, and the old strips stay on the spike to check against
+function tapeRows(w, day) {
   const rows = [];
-  rows.push(`== 해안 본부 → 암초 등대 · ${game.state.day}일차 ==`);
+  rows.push(`== 해안 본부 → 암초 등대 · ${day}일차 ==`);
   if (w.orders.length) {
     rows.push("[지침]");
     for (const o of w.orders) rows.push(`${o.changed ? "(변경) " : ""}${o.text}`);
@@ -411,7 +421,29 @@ function openTape() {
   rows.push(`[날씨] ${w.weather}`);
   for (const n of w.notices) rows.push(`[공문] ${n}`);
   rows.push("== 끝 ==");
-  openPaper("tape", `<div class="strip">${rows.map((r) => `<div>${esc(r)}</div>`).join("")}</div><div class="foot">E 닫기 · 일지에 옮겨 적었다</div>`);
+  return `<div class="strip">${rows.map((r) => `<div>${esc(r)}</div>`).join("")}</div>`;
+}
+
+function openTape() {
+  const w = game.readTape();
+  if (w) {
+    openPaper("tape", `${tapeRows(w, game.state.day)}<div class="foot">E 닫기 · 일지에 옮겨 적었다</div>`);
+    return;
+  }
+  const old = game.state.tapes;
+  if (!old.length) {
+    toast(game.state.phase === "dusk" ? "해 질 녘 일정을 마치면 전신이 온다" : "전신기가 조용하다");
+    return;
+  }
+  const when = game.state.phase === "dawn" || game.state.phase === "day" || game.state.phase === "dusk" ? " · 오늘 전신은 해 질 녘 일정 뒤에 온다" : "";
+  openPaper(
+    "tape",
+    `<div class="head">지난 전신 테이프${when}</div>${old
+      .slice()
+      .reverse()
+      .map((t) => tapeRows(t.w, t.day))
+      .join("")}<div class="foot">E 닫기</div>`,
+  );
 }
 
 function openSupply() {
@@ -425,26 +457,50 @@ function openSupply() {
      <table>${goods}</table>
      <div class="news"><div class="news-title">${esc(news.title)}</div>${news.lines.map((l) => `<div>${esc(l)}</div>`).join("")}</div>
      <div class="sub">선원이 한 말</div>
-     ${sup.sailor.map((r) => `<div class="quote">“${esc(r)}”</div>`).join("")}
+     ${sup.sailor
+       .map((r, i) => {
+         const k = `sailor:${game.state.day}:${i}`;
+         return `<div class="quote">“${bends(k, stage(), { 3: 0.4, 4: 0.5 }) ? segHtml(bend(r, k), k) : esc(r)}”</div>`;
+       })
+       .join("")}
      <div class="foot">E 닫기</div>`,
   );
+}
+
+// the logbook is read back through the keeper's memory: from stage 2 older entries come out changed,
+// from stage 4 today's too. What is written stays true, so a clearer head reads it right again.
+const MEMORY = { 2: 0.3, 3: 0.45, 4: 0.6 };
+function recall(text, key, entryDay) {
+  const s = game.state;
+  const st = stage();
+  if (entryDay >= s.day && st < 4) return esc(text);
+  // re-rolled each day: memory slips differently from one day to the next
+  const k = `log:${s.day}:${key}`;
+  return bends(k, st, MEMORY) ? segHtml(bend(text, k), k) : esc(text);
 }
 
 function openLogbook() {
   const s = game.state;
   const list = (items, empty) => (items.length ? items.join("") : `<div class="empty">${empty}</div>`);
   const orders = list(
-    s.orders.map((o) => `<div class="item"><span class="day">${o.day}일</span>${o.changed ? "(변경) " : ""}${esc(o.text)}</div>`),
+    s.orders.map((o, i) => `<div class="item"><span class="day">${o.day}일</span>${o.changed ? "(변경) " : ""}${recall(o.text, `o${i}`, o.day)}</div>`),
     "받은 지침이 없다",
   );
   const ships = list(
-    s.tonight.map((sh) => `<div class="item"><span class="day">${esc(sh.eta)}</span>${esc(sh.kind)} ${esc(sh.name)} · ${esc(sh.flag)}</div>`),
+    s.tonight.map((sh, i) => `<div class="item"><span class="day">${recall(sh.eta, `t${i}`, s.day)}</span>${esc(sh.kind)} ${esc(sh.name)} · ${recall(sh.flag, `f${i}`, s.day)}</div>`),
     s.today.tape ? "예정된 배가 없다" : "오늘 밤 전신을 아직 받지 않았다",
   );
-  const notices = list(s.notices.map((n) => `<div class="item"><span class="day">${n.day}일</span>${esc(n.text)}</div>`), "없음");
-  const rumours = list(s.rumours.map((r) => `<div class="item"><span class="day">${r.day}일</span>${esc(r.text)}</div>`), "들은 소문이 없다");
+  const notices = list(s.notices.map((n, i) => `<div class="item"><span class="day">${n.day}일</span>${recall(n.text, `n${i}`, n.day)}</div>`), "없음");
+  const rumours = list(s.rumours.map((r, i) => `<div class="item"><span class="day">${r.day}일</span>${recall(r.text, `r${i}`, r.day)}</div>`), "들은 소문이 없다");
   const radio = list(
-    s.radioLog.map((r) => `<div class="item"><span class="day">${r.day}일</span>${r.lines.filter(([w]) => w).map(([w, t]) => `${esc(w)}: ${esc(t)}`).join("<br>")}</div>`),
+    s.radioLog.map(
+      (r, j) =>
+        `<div class="item"><span class="day">${r.day}일</span>${r.lines
+          .map(([w, t], i) => [w, t, i])
+          .filter(([w]) => w)
+          .map(([w, t, i]) => `${esc(w)}: ${recall(t, `a${j}:${i}`, r.day)}`)
+          .join("<br>")}</div>`,
+    ),
     "기록된 교신이 없다",
   );
   openPaper(
@@ -468,6 +524,12 @@ const night = createNight(scene, {
     else if (m > s.minutes) s.minutes = m;
   },
   getClock: () => game.state.minutes,
+  // at stage 4 the eye can put a different pattern on a ship's flag
+  fakeFlag(spec) {
+    if (!spec.flag || !bends(`flag:${spec.id}`, stage(), { 4: 0.5 })) return null;
+    const others = ["home", "neutral", "military", "blank"].filter((f) => f !== spec.flag);
+    return others[Math.floor(Math.random() * others.length)];
+  },
 });
 let nightDay = 0;
 
@@ -520,6 +582,92 @@ function answerDoor(letIn) {
   closePaper();
 }
 
+// --- talking with survivors: free conversation through the backend, which holds each one's
+// character, secrets and lies; prewritten lines stand in when it does not answer ---
+const TALK_API = "https://interrogation-room-rqxc.onrender.com/lighthouse/api/talk";
+const TALK_FALLBACK = ["……(대답 대신 담요를 끌어당긴다)", "……지금은 말하고 싶지 않아요.", "(고개를 젓고 창밖만 본다)"];
+
+function talkLineHtml(sv, t) {
+  return `<div class="line ${t.who}"><span class="who">${t.who === "keeper" ? "나" : esc(sv.name)}</span><span>${esc(t.text)}</span></div>`;
+}
+
+function openTalk(index) {
+  const sv = game.state.survivors[index];
+  if (!sv) return;
+  openPaper(
+    "talk",
+    `<div class="head">${esc(sv.name)} · ${esc(sv.desc)}</div>
+     <div class="sub">${esc(sv.from)}에서 살아남아 ${sv.arrived}일째에 들어왔다</div>
+     <div class="talk">${sv.talk.map((t) => talkLineHtml(sv, t)).join("")}</div>
+     <input class="say" maxlength="200" autocomplete="off" placeholder="할 말을 쓰고 Enter" />
+     <div class="foot">Enter 말하기 · Esc 닫기</div>`,
+    { sv, busy: false },
+  );
+  const input = paperEl.querySelector(".say");
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation(); // keep the game's keys out of the text box
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      sayTo(input.value);
+    } else if (e.key === "Escape") closePaper();
+  });
+  input.focus();
+  scrollTalk();
+}
+
+function scrollTalk() {
+  const log = paperEl.querySelector(".talk");
+  if (log) log.scrollTop = log.scrollHeight;
+}
+
+async function sayTo(raw) {
+  const r = reading;
+  const text = raw.trim();
+  if (!r || r.kind !== "talk" || r.busy || !text) return;
+  const sv = r.sv;
+  const input = paperEl.querySelector(".say");
+  input.value = "";
+  const said = { who: "keeper", text };
+  sv.talk.push(said);
+  const log = paperEl.querySelector(".talk");
+  log.insertAdjacentHTML("beforeend", talkLineHtml(sv, said) + `<div class="line them waiting"><span class="who">${esc(sv.name)}</span><span>……</span></div>`);
+  scrollTalk();
+  r.busy = true;
+  let reply = null;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 60000); // the free server can take most of a minute to wake
+    const res = await fetch(TALK_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: sv.id,
+        message: text,
+        history: sv.talk.slice(0, -1).filter((t) => !t.offline).slice(-14),
+        stage: stage(),
+        how: sv.how,
+        stay: game.state.day - sv.arrived + 1,
+        others: game.state.survivors.filter((o) => o !== sv).map((o) => o.id),
+      }),
+      signal: ctl.signal,
+    });
+    clearTimeout(timer);
+    const data = await res.json();
+    if (!res.ok || !data.reply) throw new Error(data.error || `HTTP ${res.status}`);
+    reply = { who: "them", text: data.reply };
+  } catch (e) {
+    console.warn("survivor talk failed", e);
+    reply = { who: "them", text: TALK_FALLBACK[Math.floor(Math.random() * TALK_FALLBACK.length)], offline: true };
+  }
+  sv.talk.push(reply);
+  r.busy = false;
+  if (reading !== r) return;
+  paperEl.querySelector(".talk .waiting")?.remove();
+  paperEl.querySelector(".talk").insertAdjacentHTML("beforeend", talkLineHtml(sv, reply));
+  scrollTalk();
+  paperEl.querySelector(".say")?.focus();
+}
+
 // telescope: the view from the eyepiece, with the signal lamp worked from the same spot
 let scope = null; // { yaw, pitch, fov, refresh }
 function enterScope() {
@@ -558,7 +706,13 @@ function renderSignal() {
     html = `<div class="menu-status">바다가 조용하다${night.remaining ? " · 다음 배를 기다린다" : " · 오늘 밤 배는 모두 지나갔다"}</div>`;
   } else {
     const head = `${a.spec.lights ? "불빛을 단 배" : "불 꺼진 배"} · 위험선까지 ${night.distance}m${night.shutter ? " · 차광막 닫힘" : ""}`;
-    const asked = a.asked.map(([q, ans]) => `<div>${esc(q)}: ${esc(ans)}</div>`).join("");
+    // answers read off the ship's lamp go through the head of whoever reads them, as it was when they came in
+    const asked = a.asked
+      .map(([q, ans, st], i) => {
+        const k = `ask:${a.spec.id}:${i}`;
+        return `<div>${esc(q)}: ${bends(k, st || 1, { 3: 0.3, 4: 0.45 }) ? segHtml(bend(ans, k), k) : esc(ans)}</div>`;
+      })
+      .join("");
     let body = "";
     if (a.note) body += `<div>${esc(a.note)}</div>`;
     if (a.state === "approach") {
@@ -580,7 +734,7 @@ function signalKey(code) {
   const n = Number(code.replace("Digit", ""));
   if (a.state === "approach") {
     const asks = ["who", "where", "cargo", "hurt"];
-    if (n >= 1 && n <= 4) night.ask(asks[n - 1]);
+    if (n >= 1 && n <= 4 && night.ask(asks[n - 1]) !== null) a.asked[a.asked.length - 1][2] = stage();
     if (n === 5) night.decide("guide");
     if (n === 6) night.decide("stop");
     if (n === 7) night.decide("shutter");
@@ -606,7 +760,7 @@ function interact(info) {
   if (info.id === "logbook") return openLogbook();
   if (info.id === "telescope") return enterScope();
   if (info.id === "door") return openDoor();
-  if (info.id === "survivor") return toast(`${info.from}에서 온 사람 · ${info.desc}  (대화는 다음 단계에서)`);
+  if (info.id === "survivor") return openTalk(info.index);
   toast(NOT_YET[info.id] || info.label);
 }
 
@@ -740,9 +894,10 @@ function move(dt) {
 }
 
 function updateMercury(dt, zone) {
-  // per real second; a mercury spill on the lantern floor doubles what the room gives off
-  // the lens room gives off mercury; fresh air on the gallery clears it; every other room slowly too
-  const rate = zone === "lantern" ? 0.12 * game.spillRate : zone === "gallery" ? -0.2 : -0.03;
+  // per real second; a mercury spill on the lantern floor doubles what the room gives off.
+  // The lens room gives off mercury; fresh air on the gallery clears it a little, other rooms barely:
+  // recovery is slower than exposure, most of it comes from a night's sleep
+  const rate = zone === "lantern" ? 0.12 * game.spillRate : zone === "gallery" ? -0.02 : -0.005;
   mercury = Math.max(0, Math.min(100, mercury + rate * dt));
   if (document.activeElement !== slider) slider.value = String(Math.round(mercury));
 }
@@ -802,6 +957,15 @@ function update(dt, t) {
   setTimeOfDay(world, game.visualHours, game.state.lampOn, game.rotating, dt, game.state.phase === "night" && night.shutter, camera.position);
   world.supply.crate.visible = game.supplyWaiting;
   world.supply.boat.visible = game.supplyBoatHere;
+  // the real thing showing through, only on what is on screen right now
+  const ship = night.active && night.active.ship;
+  const fake = ship && ship.userData.fakeFlagMesh;
+  glimpses.update(dt, stage(), [paperEl, menuEl], scope && fake ? ["flag"] : []);
+  if (fake) {
+    const real = glimpses.showing === "flag";
+    fake.visible = !real;
+    ship.userData.flagMesh.visible = real;
+  }
   if (reading && reading.kind === "radio") {
     reading.timer += dt;
     if (reading.timer > 1.8) advanceRadio();
@@ -822,7 +986,7 @@ function update(dt, t) {
 
   if (debugOn) {
     const p = player.pos;
-    debugText.textContent = `구역 ${zone}\n위치 ${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}\n수은 ${mercury.toFixed(1)}\nfps ${fps}\n위치 튐 ${diag.jumps}회  ${diag.lastJump}\n프레임 멈춤 ${diag.hitches}회  ${diag.lastHitch}\n시점 튐(무시함) ${diag.lookSpikes}회  ${diag.lastSpike}`;
+    debugText.textContent = `구역 ${zone}\n위치 ${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}\n수은 ${mercury.toFixed(1)} (${stage()}단계)\nfps ${fps}\n위치 튐 ${diag.jumps}회  ${diag.lastJump}\n프레임 멈춤 ${diag.hitches}회  ${diag.lastHitch}\n시점 튐(무시함) ${diag.lookSpikes}회  ${diag.lastSpike}`;
   }
 }
 
@@ -853,4 +1017,4 @@ function frame() {
 requestAnimationFrame(frame);
 
 // dev hook for automated checks
-window.__lh = { player, world, interact, diag, game, closeup, night, camera, postUniforms, frameOnce: (dt = 1 / 60) => update(dt, clock.elapsedTime), get scope() { return scope; }, signalKey, answerDoor, enterScope, exitScope, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; }, set mode(v) { mode = v; } };
+window.__lh = { player, world, interact, glimpses, diag, game, closeup, night, camera, postUniforms, frameOnce: (dt = 1 / 60) => update(dt, clock.elapsedTime), get scope() { return scope; }, signalKey, answerDoor, enterScope, exitScope, closePaper, advanceRadio, get reading() { return reading; }, chooseTask, skipPhase, get menu() { return menu; }, putDownLantern, get holding() { return holding; }, get mercury() { return mercury; }, set mercury(v) { mercury = v; }, get mode() { return mode; }, set mode(v) { mode = v; } };

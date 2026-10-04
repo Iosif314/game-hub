@@ -658,7 +658,7 @@ export function addSurvivorModel(world, scene, index, info) {
   const p = M.survivor();
   p.position.copy(polar(ang, r, FLOOR_H));
   p.rotation.y = Math.atan2(-Math.cos(ang), -Math.sin(ang)) + 0.5;
-  p.userData.interact = { id: "survivor", label: "생존자", index, ...info };
+  p.userData.interact = { id: "survivor", label: `${info.name} · 말 걸기`, index };
   scene.add(p);
   world.interactables.push(p);
   world.survivorModels.push(p);

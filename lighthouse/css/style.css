@@ -194,3 +194,33 @@ body { display: flex; align-items: center; justify-content: center; }
 .paper-door { background: rgba(14, 13, 15, 0.96); border: 1px solid var(--paper); }
 .paper-door .quote { margin-top: 8px; color: var(--glow); }
 #menu.in-scope { top: auto; bottom: 2%; min-width: 60%; font-size: clamp(11px, 1.3vw, 14px); line-height: 1.5; background: rgba(14, 13, 15, 0.8); }
+
+/* the real thing showing through the poisoning for a few frames */
+.hx.glimpse {
+  color: var(--glow);
+  text-shadow: 1px 0 rgba(255, 247, 219, 0.7), -2px 0 rgba(0, 0, 0, 0.8);
+  background: repeating-linear-gradient(0deg, rgba(204, 199, 184, 0.28) 0 1px, transparent 1px 3px);
+  letter-spacing: 0.08em;
+}
+.paper-tape .head { color: var(--paper); text-align: center; }
+.paper-tape .strip + .strip { margin-top: 10px; }
+#debug label { display: block; }
+
+.paper-talk { background: rgba(14, 13, 15, 0.96); border: 1px solid var(--paper); }
+.paper-talk .talk { max-height: 46vh; overflow-y: auto; margin-top: 8px; }
+.paper-talk .line { margin-top: 6px; }
+.paper-talk .who { display: block; opacity: 0.6; font-size: 0.85em; }
+.paper-talk .line.keeper { color: var(--glow); }
+.paper-talk .waiting span:last-child { opacity: 0.5; }
+.paper-talk .say {
+  width: 100%;
+  margin-top: 10px;
+  padding: 6px 8px;
+  background: #0b0b0c;
+  color: var(--paper);
+  border: 1px solid rgba(204, 199, 184, 0.5);
+  font: inherit;
+  outline: none;
+}
+.paper-talk .say:focus { border-color: var(--paper); }
+#paper.paper-talk { pointer-events: auto; }

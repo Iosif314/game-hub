@@ -81,7 +81,8 @@ function lamp(g, x, y, z, r = 0.25) {
   return m;
 }
 
-export function buildShip(spec) {
+// fakeFlag: the pattern a poisoned eye sees instead of the real one (the real flag is still there, hidden)
+export function buildShip(spec, fakeFlag = null) {
   const g = new THREE.Group();
   const body = new THREE.Group(); // rolls and sinks when wrecked
   g.add(body);
@@ -150,11 +151,19 @@ export function buildShip(spec) {
   }
 
   // dark-running ships get no help: their flag only shows when the beam sweeps over it
-  const f = flag(spec.flag, spec.kind === "cargo" ? 3 : spec.kind === "small" ? 1.6 : 2.2, spec.lights);
+  const size = spec.kind === "cargo" ? 3 : spec.kind === "small" ? 1.6 : 2.2;
+  const f = flag(spec.flag, size, spec.lights);
   if (f) {
     f.position.copy(flagAt);
     body.add(f);
     g.userData.flagMesh = f;
+  }
+  const ff = f && fakeFlag ? flag(fakeFlag, size, spec.lights) : null;
+  if (ff) {
+    ff.position.copy(flagAt);
+    body.add(ff);
+    f.visible = false;
+    g.userData.fakeFlagMesh = ff;
   }
   // deck lights so the ship and its flag can be read at night; dark-running ships have none
   if (spec.lights) {

@@ -69,6 +69,7 @@ export function createGame(hooks) {
     notices: [],
     weather: null,
     today: { radio: false, supply: false, tape: false },
+    tapes: [], // every telegram received, as printed: { day, w }
   };
 
   const story = () => STORY[g.day - 1] || {};
@@ -150,7 +151,7 @@ export function createGame(hooks) {
     e.pressure = 0;
     const used = n.hoursLit * 3.5;
     e.tank = clamp(e.tank - used);
-    hooks.expose(-6); // a night's sleep
+    hooks.expose(-8); // a night's sleep
 
     // survivors who knocked and were left outside all day give up
     for (const k of g.knocks) if (k.arrived && !k.answered) g.turnedAway += k.n;
@@ -323,8 +324,11 @@ export function createGame(hooks) {
       g.phase = "dawn";
       g.lampOn = n.lit && n.hoursLit >= 10;
       for (const k of g.knocks) k.arrived = true;
-      if (g.hungry) hooks.toast("배가 고파 몸이 무겁다 · 오늘 정비는 3회");
-      g.jobs = g.hungry ? DAWN_JOBS - 1 : DAWN_JOBS;
+      // stage 3 of the poisoning: a night without sleep costs a job too
+      const sleepless = hooks.stage && hooks.stage() >= 3;
+      g.jobs = DAWN_JOBS - (g.hungry ? 1 : 0) - (sleepless ? 1 : 0);
+      const why = [g.hungry && "배가 고파", sleepless && "밤새 잠을 설쳐"].filter(Boolean).join(" ");
+      if (why) hooks.toast(`${why} 몸이 무겁다 · 오늘 정비는 ${g.jobs}회`);
       g.done = [];
       g.night = null;
       g.tonight = [];
@@ -343,7 +347,13 @@ export function createGame(hooks) {
       const k = api.knock;
       if (!k) return;
       k.answered = true;
-      if (letIn) for (let i = 0; i < k.n; i++) g.survivors.push({ from: k.from, desc: k.desc });
+      if (letIn) {
+        for (let i = 0; i < k.n; i++) {
+          const p = (k.people || [])[i] || {};
+          // talk: what has been said between them, kept for the next conversation
+          g.survivors.push({ id: p.id, name: p.name || "생존자", desc: p.desc || k.desc, from: k.from, how: k.how, arrived: g.day, talk: [] });
+        }
+      }
       else g.turnedAway += k.n;
     },
     // --- the day's information ---
@@ -394,6 +404,7 @@ export function createGame(hooks) {
           if (i >= 0) g.orders[i] = entry;
           else g.orders.push(entry);
         }
+        g.tapes.push({ day: g.day, w });
         g.tonight = w.ships;
         g.weather = w.weather;
         for (const n of w.notices) g.notices.push({ day: g.day, text: n });

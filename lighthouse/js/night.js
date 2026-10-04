@@ -42,7 +42,7 @@ export function createNight(scene, hooks) {
   }
 
   function spawn(spec) {
-    const ship = buildShip(spec);
+    const ship = buildShip(spec, hooks.fakeFlag ? hooks.fakeFlag(spec) : null);
     const lane = laneOf(spec);
     ship.position.copy(lane.start);
     ship.rotation.y = Math.atan2(-lane.t.z, lane.t.x);
@@ -80,7 +80,7 @@ export function createNight(scene, hooks) {
     const min = sv.min || 0;
     const stormy = (WEATHER_RISK[ctx.weather] || 0) >= 0.2;
     const n = Math.max(min, Math.min(sv.max, min + Math.floor(Math.random() * (sv.max - min + 1)) - (stormy ? 1 : 0)));
-    if (n > 0) wrecks.push({ from: cur.spec.name, n, desc: sv.desc, how, when: Math.random() < 0.5 ? "night" : "dawn" });
+    if (n > 0) wrecks.push({ from: cur.spec.name, n, desc: sv.desc, people: (sv.people || []).slice(0, n), how, when: Math.random() < 0.5 ? "night" : "dawn" });
     hooks.toast(`${cur.spec.name} · 암초에 부딪혔다`);
   }
 
@@ -203,7 +203,7 @@ export function createNight(scene, hooks) {
       }
       const ship = cur.ship;
       // flag flutter and the answering lamp blinking
-      if (ship.userData.flagMesh) ship.userData.flagMesh.rotation.y = Math.sin(performance.now() / 300) * 0.25;
+      for (const f of [ship.userData.flagMesh, ship.userData.fakeFlagMesh]) if (f) f.rotation.y = Math.sin(performance.now() / 300) * 0.25;
       if (cur.flash > 0) cur.flash -= dt;
       const blink = cur.flash > 0 ? Math.floor(cur.flash * 6) % 2 === 0 : true;
       for (const l of ship.userData.lamps) l.visible = blink && !(cur.spec.flicker && Math.random() < 0.15);
