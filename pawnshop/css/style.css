@@ -130,31 +130,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .paper .notice { margin-top: 10px; padding-top: 6px; border-top: 1px dashed #3b2e22; font-size: 0.9em; }
 .paper-panel .btns button { background: #2a2019; }
 
-.label-form {
-  background: #d9c8a6;
-  color: #1d1610;
-  padding: 12px 16px;
-  box-shadow: 0 0 0 2px #6b5540;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.label-form .head { font-size: 1.05em; border-bottom: 1px solid #6b5540; margin-bottom: 4px; }
-.label-form label { display: flex; align-items: baseline; gap: 8px; font-size: 0.9em; color: #4a3a2c; }
-.label-form label span { flex: 0 0 3.6em; }
-.label-form label input, .label-form label select { flex: 1; min-width: 0; }
-.label-form input, .label-form select {
-  font: inherit;
-  font-size: 1.1em;
-  color: #140f0c;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid #6b5540;
-  padding: 2px 0;
-  outline: none;
-  font-family: "Galmuri9", "Galmuri11", monospace;
-}
-
 .label-card, #label-tip {
   background: #d9c8a6;
   color: #1d1610;

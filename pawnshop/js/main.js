@@ -2,7 +2,7 @@ import { createScreen, W, H, rect, crect, rng } from "./screen.js";
 import * as A from "./art.js";
 import { ROOM } from "./art.js";
 import { startAudio, createGenerator, createVoice, sfx } from "./audio.js";
-import { EMOTIONS, EMOTION_KEYS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -816,56 +816,42 @@ function chairScene(o) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// the label: I write it myself
+// the label: written out from the deal, then the jar goes on the shelf
 // ---------------------------------------------------------------------------------------------
-const DUE_DATES = ["1851. 10. 15", "1851. 10. 16", "1851. 10. 17", "1851. 10. 18", "1851. 10. 19"];
+const dateOf = (day) => `1851. 10. ${13 + day}`;
 
 function labelScene({ v, res, owned, owner, pawn }) {
-  const emotion = (v.offer || {}).emotion;
+  const o = v.offer || {};
+  const emotion = o.emotion;
   const no = String(S.ticket++).padStart(4, "0");
-  const sel = (name, opts) => `<select name="${name}"><option value="">—</option>${opts.map((o) => `<option>${esc(o)}</option>`).join("")}</select>`;
+  const label = {
+    no,
+    name: PEOPLE[owner].name,
+    emotion: EMOTIONS[emotion].name,
+    object: o.object || "",
+    amount: `${Math.max(1, Math.round(res.amount))}할`,
+    date: dateOf(S.day),
+    due: pawn ? dateOf(pawn.dueDay) : "",
+    loan: pawn ? String(pawn.loan) : String(o.price || ""),
+    rate: pawn ? `${pawn.rate}%` : "",
+    memo: pawn ? "" : `${PEOPLE[v.who].name}에게서 삼`,
+    hand: "mine",
+  };
   return {
     enter() {
       tip("");
       sfx.glass();
-      panel(
-        `<div class="label-form">
-           <div class="head">라벨 · No. ${no}</div>
-           <label><span>이름</span><input name="name" autocomplete="off" /></label>
-           <label><span>감정</span>${sel("emotion", EMOTION_KEYS.map((k) => EMOTIONS[k].name))}</label>
-           <label><span>대상</span><input name="object" autocomplete="off" /></label>
-           <label><span>양</span>${sel("amount", Array.from({ length: 10 }, (_, i) => `${i + 1}할`))}</label>
-           <label><span>추출일</span>${sel("date", DATES)}</label>
-           <label><span>기한</span>${sel("due", DUE_DATES)}</label>
-           <label><span>대출금</span><input name="loan" autocomplete="off" /></label>
-           <label><span>이자</span>${sel("rate", ["10%", "20%", "30%"])}</label>
-           <label><span>메모</span><input name="memo" autocomplete="off" /></label>
-         </div>`,
-        [
-          {
-            label: "병에 붙이고 선반에 올린다",
-            fn: () => {
-              const f = {};
-              for (const el of pnl.querySelectorAll("input, select")) f[el.name] = el.value.trim();
-              S.jars.push({
-                id: ++uid,
-                emotion,
-                amount: res.amount,
-                owned,
-                owner,
-                pawn,
-                moment: v.moment,
-                label: { no, name: f.name, emotion: f.emotion, object: f.object, amount: f.amount, date: f.date, due: f.due, loan: f.loan, rate: f.rate, memo: f.memo, hand: "mine" },
-              });
-              sfx.glass();
-              closePanel();
-              toCounterNext();
-            },
+      panel(`<div class="label-card">${labelText(label)}</div>`, [
+        {
+          label: "선반에 올린다",
+          fn: () => {
+            S.jars.push({ id: ++uid, emotion, amount: res.amount, owned, owner, pawn, moment: v.moment, label });
+            sfx.glass();
+            closePanel();
+            toCounterNext();
           },
-        ],
-        "side",
-      );
-      pnl.querySelector("input").focus();
+        },
+      ], "side");
     },
     leave() {
       closePanel();
