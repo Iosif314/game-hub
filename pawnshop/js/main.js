@@ -1,8 +1,8 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006c";
-import * as A from "./art.js?v=20261006c";
-import { ROOM } from "./art.js?v=20261006c";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006c";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js?v=20261006c";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006d";
+import * as A from "./art.js?v=20261006d";
+import { ROOM } from "./art.js?v=20261006d";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006d";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js?v=20261006d";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -16,6 +16,13 @@ const dChoices = dlg.querySelector(".choices");
 const pnl = $("panel");
 const labelTip = $("label-tip");
 const overlay = $("overlay");
+
+// the build number is the cache-busting tag on this script's address, e.g. 20261006c → v2026.10.06c
+{
+  const tag = new URL(import.meta.url).searchParams.get("v") || "dev";
+  const m = /^(\d{4})(\d{2})(\d{2})(.*)$/.exec(tag);
+  $("version").textContent = m ? `v${m[1]}.${m[2]}.${m[3]}${m[4]}` : `v${tag}`;
+}
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const round1 = (v) => Math.round(v * 10) / 10;

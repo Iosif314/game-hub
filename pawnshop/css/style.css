@@ -201,3 +201,13 @@ button:disabled { opacity: 0.4; cursor: default; }
 #dialog .text .deal { margin-top: 4px; font-size: 0.85em; color: var(--paper-dim); }
 #dialog .say-line { border-style: dashed; text-align: left; }
 .paper.rules > div:not(.masthead):not(.headline):not(.notice) { margin-top: 2px; }
+#version {
+  position: absolute;
+  right: 0.8%;
+  bottom: 0.4%;
+  font-size: clamp(8px, 0.9vw, 11px);
+  color: var(--paper-dim);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 6;
+}
