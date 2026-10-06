@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006v";
-import * as A from "./art.js?v=20261006v";
-import { ROOM } from "./art.js?v=20261006v";
-import { createSelf3D } from "./self3d.js?v=20261006v";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006v";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006v";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006x";
+import * as A from "./art.js?v=20261006x";
+import { ROOM } from "./art.js?v=20261006x";
+import { createSelf3D } from "./self3d.js?v=20261006x";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006x";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006x";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -292,7 +292,7 @@ const front = {
       tip("E  응대한다");
       if (ePressed) serve(arrival);
     } else if (this.near.rules) {
-      tip("E  조합 규정을 읽는다");
+      tip(ringing() ? `E  조합 규정을 읽는다 · ${bellText()}` : "E  조합 규정을 읽는다");
       if (ePressed) showRules();
     } else if (this.near.cellar) {
       tip(ringing() ? `E  저장고로 내려간다 · ${bellText()}` : "E  저장고로 내려간다");
