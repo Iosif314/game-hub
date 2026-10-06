@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006i";
-import * as A from "./art.js?v=20261006i";
-import { ROOM } from "./art.js?v=20261006i";
-import { createSelf3D } from "./self3d.js?v=20261006i";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006i";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006i";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006j";
+import * as A from "./art.js?v=20261006j";
+import { ROOM } from "./art.js?v=20261006j";
+import { createSelf3D } from "./self3d.js?v=20261006j";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006j";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006j";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -1478,7 +1478,10 @@ function selfPawn(back) {
   const rows = Object.entries(SELF).map(([k, e]) => ({
     label: `${e.name}${S.selfTaken[k] ? `  (이미 ${S.selfTaken[k]}할 맡김)` : ""}`,
     disabled: S.selfTaken[k] >= e.reserve,
-    fn: () => windMenu(k, back, 2),
+    fn: () => {
+      closePanel();
+      go(selfRoomScene(k, () => go(evening)));
+    },
   }));
   panel(
     `<div class="ledger">
@@ -1491,34 +1494,97 @@ function selfPawn(back) {
   );
 }
 
-function windMenu(e, back, turns) {
-  panel(
-    `<div class="ledger">
-       <div class="head">태엽 감기 · ${esc(SELF[e].name)}</div>
-       <div class="row">${turns}바퀴 감았다. ${turns}할, ${turns * SELF_PRICE}실링.</div>
-       <div class="row">레버를 당기면 다 풀릴 때까지 아무도 멈출 수 없다.</div>
-     </div>`,
-    [
-      {
-        label: "한 바퀴 더 감는다",
-        disabled: turns >= 10,
-        fn: () => {
+// alone in the back room: I walk to the clockwork and wind it a turn at a time, sit down and strap my
+// wrists, and pull the lever. From there it is my own eyes, and it does not stop.
+const CLOCK_X = 99;
+
+function selfRoomScene(e, back) {
+  const me = { x: A.SPOTS.door - 10, facing: -1, walk: 0 };
+  let cam = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
+  let turns = 0;
+  let seated = false;
+  let windAngle = 0;
+  let spin = 0;
+  const near = { clock: false, chair: false, door: false };
+
+  return {
+    enter() {
+      hideDialog();
+      hud();
+    },
+    leave() {
+      tip("");
+    },
+    update(dt) {
+      near.clock = !seated && Math.abs(me.x - CLOCK_X) < 20;
+      near.chair = !seated && Math.abs(me.x - A.SPOTS.chair) < 22;
+      near.door = !seated && me.x > A.SPOTS.door - 24;
+      if (!seated) {
+        const dir = (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0);
+        if (dir) {
+          me.x = Math.max(12, Math.min(A.RW - 12, me.x + dir * 62 * dt));
+          me.facing = dir;
+          me.walk += dt * 11;
+        } else me.walk = 0;
+      }
+      const target = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
+      cam += (target - cam) * Math.min(1, dt * 6);
+      if (spin > 0) {
+        spin -= dt;
+        windAngle += dt * 9;
+      }
+      const wound = turns ? `${turns}바퀴 (${SELF[e].name} ${turns}할 · ${turns * SELF_PRICE}실링)` : "";
+      if (seated) {
+        tip(`E·Space  태엽을 푼다 · 멈출 수 없다 · ${wound}`);
+        if (ePressed || keysDown.has("Space") || holding) {
+          holding = false;
+          go(selfChairScene({ mode: "extract", emotion: e, turns, autostart: true, done: (taken) => afterSelf(e, taken) }));
+        }
+        return;
+      }
+      if (near.clock) {
+        tip(turns >= 10 ? `더는 감기지 않는다 · ${wound}` : `E  태엽을 한 바퀴 감는다${wound ? " · " + wound : ""}`);
+        if (ePressed && turns < 10) {
+          turns++;
+          spin = 0.35;
           sfx.crankTick();
-          windMenu(e, back, turns + 1);
-        },
-      },
-      { label: "한 바퀴 푼다", disabled: turns <= 1, fn: () => windMenu(e, back, turns - 1) },
-      {
-        label: "의자에 앉는다",
-        fn: () => {
-          closePanel();
-          go(selfChairScene({ mode: "extract", emotion: e, turns, done: (taken) => afterSelf(e, taken) }));
-        },
-      },
-      { label: "그만둔다", fn: back },
-    ],
-    "paper-panel",
-  );
+          setTimeout(() => sfx.crankTick(), 120);
+        }
+      } else if (near.chair && turns > 0) {
+        tip(`E  의자에 앉아 손목을 묶는다 · ${wound}`);
+        if (ePressed) {
+          seated = true;
+          sfx.strap();
+        }
+      } else if (near.door) {
+        tip(turns ? `E  그만두고 가게로 돌아간다 · ${wound}` : "E  가게로 돌아간다");
+        if (ePressed) back();
+      } else tip(turns ? `← → 이동 · 의자에 앉는다 · ${wound}` : "← → 이동 · 태엽 장치로 간다");
+    },
+    draw(t) {
+      const b = screen.base;
+      const c = screen.color;
+      const cx = Math.round(cam);
+      b.save();
+      c.save();
+      b.translate(-cx, 0);
+      c.translate(-cx, 0);
+      A.drawRoom(b, t, windAngle);
+      A.drawGenerator(b, 0);
+      A.drawChair(b);
+      if (seated) A.drawSitter(b, A.KEEPER, { shake: 0, scream: 0, back: 0, face: "calm" }, t);
+      else A.drawWalker(b, A.KEEPER, me.x, me.facing, me.walk);
+      const j = ROOM.jar;
+      A.drawJar(b, j.x, j.y, j.w, j.h, { target: turns || null });
+      A.drawRoomLight(b, t);
+      drawPerm(c);
+      b.restore();
+      c.restore();
+      const glow = (paint) => A.drawGlow(c, (m) => (m.save(), m.translate(-cx, 0), paint(m), m.restore()), t);
+      if (near.clock) glow(A.clockworkSilhouette);
+      if (near.chair && turns > 0) glow(A.chairSilhouette);
+    },
+  };
 }
 
 function afterSelf(e, taken) {
@@ -1564,6 +1630,16 @@ function selfChairScene(o) {
       S3.show(true);
       if (!generator.node) generator.node = createGenerator();
       if (!voice.node) voice.node = createVoice();
+      if (o.autostart) {
+        st.phase = "running";
+        tip("");
+        sfx.click();
+        if (!injecting) {
+          S.screams++;
+          S.screamsToday++;
+        }
+        return;
+      }
       sfx.strap();
       tip(injecting ? "" : "손목을 묶었다");
     },

@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006i";
-import { EMOTIONS } from "./data.js?v=20261006i";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006j";
+import { EMOTIONS } from "./data.js?v=20261006j";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -264,7 +264,7 @@ export const ROOM = {
   apron: { x: 4, y: 70, w: 22, h: 60 },
 };
 
-export function drawRoom(b, t) {
+export function drawRoom(b, t, clockAngle = 0) {
   rect(b, 0, 0, RW, ROOM.floor, 30);
   for (let x = 6; x < RW; x += 11) rect(b, x, 0, 1, 100, 25);
   rect(b, 0, 100, RW, 30, 40);
@@ -278,7 +278,7 @@ export function drawRoom(b, t) {
   for (let x = 193; x < 209; x += 6) rect(b, x, 33, 1, 26, 60);
   drawDoor(b, t);
   // the old master's clockwork, between the generator and the chair
-  drawClockwork(b, 86, 108);
+  drawClockwork(b, 86, 108, clockAngle);
   // workbench
   rect(b, 228, 96, 84, 5, 92);
   rect(b, 228, 96, 84, 1, 120);
@@ -727,6 +727,12 @@ function walker(b, look, x, facing, walk, armTo, expr, oy, flat) {
 }
 
 // silhouettes for the "you can use this" glow
+export function clockworkSilhouette(m) {
+  m.fillRect(86, 108, 26, 22);
+  m.fillRect(92, 102, 14, 3);
+  m.fillRect(98, 104, 2, 4);
+}
+
 export function chairSilhouette(m) {
   const x = ROOM.chairX;
   const f = ROOM.floor;
