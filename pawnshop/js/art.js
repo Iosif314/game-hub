@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006x";
-import { EMOTIONS } from "./data.js?v=20261006x";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006y";
+import { EMOTIONS } from "./data.js?v=20261006y";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -629,9 +629,9 @@ export const ROOM_SELF = {
 
 // --- walking about the back room (side view) ---
 export const RW = 324; // the back room is a little wider than the screen; the camera follows me
-export const RL = -30; // it reaches this far left, to the back door
-export const DOOR = { x: 282, w: 30 }; // the way through to the counter
-export const BACKDOOR = { x: -26, w: 24 }; // the customers' way in, from the alley
+export const RL = -30; // it reaches this far left, to the passage
+export const DOOR = { x: -28, w: 24 }; // the passage to the counter, at the far left
+export const BACKDOOR = { x: 286, w: 24 }; // the customers' way in, from the yard, at the far right
 export const SPOTS = { crank: 22, chair: 146, seat: ROOM.chairX + 22, door: DOOR.x + DOOR.w / 2, backdoor: BACKDOOR.x + BACKDOOR.w / 2 };
 
 // the back door: shut, or swung open (0..1) onto the grey alley
@@ -642,17 +642,17 @@ function drawBackDoor(b, open) {
   rect(b, x + 3, 40, w - 6, ROOM.floor - 46, 104);
   if (open > 0) {
     const leaf = Math.round(w * (1 - open));
-    rect(b, x + leaf, 34, w - leaf, ROOM.floor - 34, 18);
+    rect(b, x, 34, w - leaf, ROOM.floor - 34, 18);
     const g = b.createLinearGradient(x, 0, x + w, 0);
-    g.addColorStop(0, "rgba(255,255,255,0.14)");
-    g.addColorStop(1, "rgba(255,255,255,0)");
+    g.addColorStop(0, "rgba(255,255,255,0)");
+    g.addColorStop(1, "rgba(255,255,255,0.14)");
     b.fillStyle = g;
-    b.fillRect(x + leaf, 34, w - leaf, ROOM.floor - 34);
-    rect(b, x, 34, Math.max(2, leaf), ROOM.floor - 34, 70);
+    b.fillRect(x, 34, w - leaf, ROOM.floor - 34);
+    rect(b, x + w - Math.max(2, leaf), 34, Math.max(2, leaf), ROOM.floor - 34, 70);
   } else {
     rect(b, x + 3, 50, w - 6, 1, 70);
     rect(b, x + 3, 90, w - 6, 1, 70);
-    rect(b, x + w - 6, 82, 3, 3, 170);
+    rect(b, x + 3, 82, 3, 3, 170);
   }
 }
 export function backDoorSilhouette(m) {
@@ -662,11 +662,11 @@ export function backDoorSilhouette(m) {
 
 // --- the shop front: the grille counter seen straight on, me walking the floor in front of it ---
 export const FW = 340; // a little wider than the screen
-export const FSPOT = { exit: 12, cellar: 56, window: 252, rules: 323 };
-const FCELLAR = { x: 43, w: 26 }; // the door down to the cellar
+// the passage to the back room off the left edge, the stairs to the storeroom off the right
+export const FSPOT = { exit: 10, stairs: FW - 10, window: 252, rules: 183 };
 const FWIN = { x: 210, y: 26, w: 84, h: 72 }; // the grille window in the wall above the counter
-const FRULES = { x: 312, y: 34, w: 22, h: 30 };
-const FCOUNTER = { x: 162, w: 170 };
+const FRULES = { x: 172, y: 30, w: 22, h: 30 };
+const FCOUNTER = { x: 150, w: 158 };
 
 // cust: { look, expr, rise } — the person standing at the grille, if any
 export function drawFront(b, t, { bellSince = -10, cust = null } = {}) {
@@ -677,19 +677,15 @@ export function drawFront(b, t, { bellSince = -10, cust = null } = {}) {
   // the doorway to the back room, at the far left
   rect(b, 0, 28, 30, ROOM.floor - 28, 62);
   rect(b, 0, 32, 26, ROOM.floor - 32, 16);
-  // the low door down to the cellar, a step down behind it
-  const d = FCELLAR;
-  rect(b, d.x - 3, 44, d.w + 6, ROOM.floor - 44, 58);
-  rect(b, d.x, 48, d.w, ROOM.floor - 48, 86);
-  rect(b, d.x + 3, 52, d.w - 6, 30, 94);
-  rect(b, d.x + 3, 86, d.w - 6, 38, 94);
-  rect(b, d.x + d.w - 6, 88, 3, 3, 170);
-  rect(b, d.x + 6, 40, d.w - 12, 3, 120);
+  // the opening to the stairs, at the far right
+  rect(b, FW - 30, 28, 30, ROOM.floor - 28, 62);
+  rect(b, FW - 26, 32, 26, ROOM.floor - 32, 16);
+  for (let i = 0; i < 5; i++) rect(b, FW - 26 + i * 5, ROOM.floor - 8 - i * 8, 26 - i * 5, 2, 40);
   // a shelf of empty jars
-  rect(b, 80, 64, 44, 3, 92);
-  rect(b, 84, 67, 2, 6, 60);
-  rect(b, 118, 67, 2, 6, 60);
-  for (let i = 0; i < 3; i++) drawJar(b, 84 + i * 13, 52, 9, 12, { marks: false });
+  rect(b, 50, 64, 57, 3, 92);
+  rect(b, 54, 67, 2, 6, 60);
+  rect(b, 101, 67, 2, 6, 60);
+  for (let i = 0; i < 4; i++) drawJar(b, 54 + i * 13, 52, 9, 12, { marks: false });
   // the pawnbroker's sign: three balls on a bracket
   rect(b, 128, 14, 30, 2, 70);
   for (const [x, y] of [
@@ -742,12 +738,12 @@ export function drawFront(b, t, { bellSince = -10, cust = null } = {}) {
   for (let x = k0.x + 8; x < k0.x + k0.w - 24; x += 30) rect(b, x, 107, 24, 18, 60);
   for (let x = k0.x + 8; x < k0.x + k0.w - 24; x += 30) rect(b, x, 107, 24, 1, 92);
   // ledger, oil lamp, bell on the counter top
-  rect(b, 172, 95, 22, 3, 196);
-  rect(b, 182, 95, 2, 3, 110);
+  rect(b, 160, 95, 22, 3, 196);
+  rect(b, 170, 95, 2, 3, 110);
   rect(b, 202, 92, 5, 6, 120);
   rect(b, 203, 84, 3, 8, 170);
   const ringing = bellSince >= 0 && bellSince < 0.5;
-  const bx = 304 + (ringing ? Math.round(Math.sin(bellSince * 60) * (1 - bellSince / 0.5)) : 0);
+  const bx = 300 + (ringing ? Math.round(Math.sin(bellSince * 60) * (1 - bellSince / 0.5)) : 0);
   ellipse(b, bx, 95, 4, 3, 150);
   rect(b, bx - 5, 97, 10, 1, 96);
   rect(b, bx - 1, 91, 2, 1, 140);
@@ -774,10 +770,7 @@ export function frontWindowSilhouette(m) {
   const w = FWIN;
   m.fillRect(w.x - 4, w.y - 4, w.w + 8, w.h + 4);
   m.fillRect(FCOUNTER.x, 98, FCOUNTER.w, 5);
-  m.fillRect(299, 90, 10, 8);
-}
-export function cellarDoorSilhouette(m) {
-  m.fillRect(FCELLAR.x - 3, 44, FCELLAR.w + 6, ROOM.floor - 44);
+  m.fillRect(295, 90, 10, 8);
 }
 export function frontRulesSilhouette(m) {
   const r = FRULES;
@@ -788,10 +781,10 @@ export function drawDoor(b, t) {
   const { x, w } = DOOR;
   rect(b, x - 3, 30, w + 6, ROOM.floor - 30, 64);
   rect(b, x, 34, w, ROOM.floor - 34, 14);
-  // the shop beyond, lamplit
+  // the passage beyond, lamplit from the counter
   const g = b.createLinearGradient(x, 0, x + w, 0);
-  g.addColorStop(0, "rgba(255,255,255,0)");
-  g.addColorStop(1, "rgba(255,255,255,0.18)");
+  g.addColorStop(0, "rgba(255,255,255,0.18)");
+  g.addColorStop(1, "rgba(255,255,255,0)");
   b.fillStyle = g;
   b.fillRect(x, 34, w, ROOM.floor - 34);
   // the door itself, swung open against the wall

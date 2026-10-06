@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006x";
-import * as A from "./art.js?v=20261006x";
-import { ROOM } from "./art.js?v=20261006x";
-import { createSelf3D } from "./self3d.js?v=20261006x";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006x";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006x";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006y";
+import * as A from "./art.js?v=20261006y";
+import { ROOM } from "./art.js?v=20261006y";
+import { createSelf3D } from "./self3d.js?v=20261006y";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006y";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006y";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -214,6 +214,12 @@ const counter = {
 // --- walking the shop: the counter room in front, the back room behind it ---
 // where I stand, kept between scenes; x is in the coordinates of whichever room I am in
 const keeper = { x: 150, facing: 1 };
+let entry = null; // { x, facing } where the room I am going into puts me
+function arrive() {
+  if (entry) Object.assign(keeper, entry);
+  entry = null;
+  return keeper;
+}
 const keyDir = () => (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0);
 const camFor = (x, lo, hi) => Math.max(lo, Math.min(hi - W, x - W / 2));
 
@@ -252,12 +258,13 @@ const bellText = () => (arrival.rung > 1 ? "딸랑, 딸랑— 손님이 다시 �
 const front = {
   me: { x: 0, facing: 1, walk: 0 },
   cam: 0,
-  near: { window: false, rules: false, cellar: false },
+  near: { window: false, rules: false },
   leaving: null, // whoever just stepped away from the grille, sinking out of sight
   enter() {
     hud();
     hideDialog();
-    Object.assign(this.me, { x: keeper.x, facing: keeper.facing, walk: 0 });
+    const at = arrive();
+    Object.assign(this.me, { x: at.x, facing: at.facing, walk: 0 });
     this.cam = camFor(this.me.x, 0, A.FW);
   },
   leave() {
@@ -271,22 +278,30 @@ const front = {
     const busy = !pnl.classList.contains("hidden");
     const dir = busy ? 0 : keyDir();
     if (dir) {
-      me.x = Math.min(A.FW - 14, me.x + dir * 62 * dt);
+      me.x += dir * 62 * dt;
       me.facing = dir;
       me.walk += dt * 11;
     } else me.walk = 0;
     this.cam += (camFor(me.x, 0, A.FW) - this.cam) * Math.min(1, dt * 6);
     if (me.x <= A.FSPOT.exit) {
-      // through the doorway into the back room
-      keeper.x = A.RW - 16;
-      keeper.facing = -1;
-      me.x = A.FSPOT.exit + 1;
-      enterBack();
-      return;
+      // down the passage into the back room
+      entry = { x: A.RL + 16, facing: 1 };
+      return enterBack();
+    }
+    if (me.x >= A.FSPOT.stairs) {
+      // down the stairs to the storeroom; back up the same way
+      return go(
+        cellarScene({
+          title: "저장고 · 병에 마우스를 올리면 라벨이 보인다",
+          back: () => {
+            entry = { x: A.FSPOT.stairs - 14, facing: -1 };
+            go(front);
+          },
+        }),
+      );
     }
     this.near.window = Math.abs(me.x - A.FSPOT.window) < 40;
     this.near.rules = Math.abs(me.x - A.FSPOT.rules) < 14;
-    this.near.cellar = Math.abs(me.x - A.FSPOT.cellar) < 14;
     if (busy) return;
     if (this.near.window && ringing()) {
       tip("E  응대한다");
@@ -294,12 +309,9 @@ const front = {
     } else if (this.near.rules) {
       tip(ringing() ? `E  조합 규정을 읽는다 · ${bellText()}` : "E  조합 규정을 읽는다");
       if (ePressed) showRules();
-    } else if (this.near.cellar) {
-      tip(ringing() ? `E  저장고로 내려간다 · ${bellText()}` : "E  저장고로 내려간다");
-      if (ePressed) go(cellarScene({ title: "저장고 · 병에 마우스를 올리면 라벨이 보인다", back: () => go(front) }));
     } else if (pending) tip("← 추출실로 간다 · 손님이 뒷문에서 기다린다");
     else if (ringing()) tip(`${bellText()} · 창구로 간다`);
-    else tip("← → 이동 · ← 끝은 추출실");
+    else tip("← → 이동 · ← 추출실 · → 저장고");
   },
   draw(t) {
     const b = screen.base;
@@ -322,7 +334,6 @@ const front = {
     const glow = (paint) => A.drawGlow(c, (m) => (m.save(), m.translate(-cx, 0), paint(m), m.restore()), t);
     if (this.near.window && ringing()) glow(A.frontWindowSilhouette);
     if (this.near.rules) glow(A.frontRulesSilhouette);
-    if (this.near.cellar) glow(A.cellarDoorSilhouette);
   },
 };
 
@@ -333,7 +344,8 @@ const backRoom = {
   enter() {
     hud();
     hideDialog();
-    Object.assign(this.me, { x: keeper.x, facing: keeper.facing, walk: 0 });
+    const at = arrive();
+    Object.assign(this.me, { x: at.x, facing: at.facing, walk: 0 });
     this.cam = camFor(this.me.x, A.RL, A.RW);
   },
   leave() {
@@ -346,14 +358,14 @@ const backRoom = {
     const me = this.me;
     const dir = keyDir();
     if (dir) {
-      me.x = Math.max(A.RL + 12, me.x + dir * 62 * dt);
+      me.x = Math.min(A.RW - 12, me.x + dir * 62 * dt);
       me.facing = dir;
       me.walk += dt * 11;
     } else me.walk = 0;
     this.cam += (camFor(me.x, A.RL, A.RW) - this.cam) * Math.min(1, dt * 6);
-    if (me.x >= A.RW - 8) return toFrontFromBack();
-    if (ringing()) tip(`${bellText()} · → 창구로 간다`);
-    else tip("← → 이동 · → 끝은 창구");
+    if (me.x <= A.RL + 8) return toFrontFromBack();
+    if (ringing()) tip(`${bellText()} · ← 창구로 간다`);
+    else tip("← → 이동 · ← 끝은 창구");
   },
   draw(t) {
     const b = screen.base;
@@ -381,8 +393,7 @@ function enterBack() {
   else go(backRoom);
 }
 function toFrontFromBack() {
-  keeper.x = A.FSPOT.exit + 10;
-  keeper.facing = 1;
+  entry = { x: A.FSPOT.exit + 14, facing: 1 };
   go(front);
 }
 
@@ -397,8 +408,7 @@ function backDoor(o) {
 
 function toFront() {
   counter.cust = null;
-  keeper.x = 150;
-  keeper.facing = 1;
+  entry = { x: 120, facing: 1 };
   go(front);
   nextVisit();
 }
@@ -842,10 +852,11 @@ function chairScene(o) {
     burst: 0,
   };
   const emo = EMOTIONS[o.emotion];
-  // I come in from the counter; the customer waits outside the back door until I let them in,
+  // I come in by the passage; the customer waits outside the yard door until I let them in,
   // then keeps a step behind me
-  const me = { x: keeper.x, facing: keeper.facing, walk: 0 };
-  const guest = { x: A.SPOTS.backdoor, facing: 1, walk: 0, state: o.outside === false ? "follow" : "outside" };
+  const at = arrive();
+  const me = { x: at.x, facing: at.facing, walk: 0 };
+  const guest = { x: A.SPOTS.backdoor, facing: -1, walk: 0, state: o.outside === false ? "follow" : "outside" };
   if (guest.state === "outside") st.phase = "door";
   let cam = camFor(me.x, A.RL, A.RW);
   let doorOpen = 0;
@@ -904,7 +915,7 @@ function chairScene(o) {
     const dir = free ? (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0) : 0;
     if (dir) {
       // with someone inside I stay in here; before that I can still go back to the counter
-      me.x = Math.max(A.RL + 12, Math.min(st.phase === "door" ? A.RW : A.RW - 14, me.x + dir * 62 * dt));
+      me.x = Math.min(A.RW - 12, Math.max(st.phase === "door" ? A.RL : A.RL + 14, me.x + dir * 62 * dt));
       me.facing = dir;
       me.walk += dt * 11;
     } else me.walk = 0;
@@ -958,7 +969,7 @@ function chairScene(o) {
     update(dt, t) {
       const cranking = walking(dt);
       if (st.phase === "door") {
-        if (me.x >= A.RW - 8) return toFrontFromBack();
+        if (me.x <= A.RL + 8) return toFrontFromBack();
         if (near.door) {
           tip("E  뒷문을 열고 손님을 들인다");
           if (ePressed) {
@@ -969,7 +980,7 @@ function chairScene(o) {
             guest.state = "follow";
             st.phase = "walk";
           }
-        } else tip("← 뒷문으로 간다 · 손님이 기다린다");
+        } else tip("→ 뒷문으로 간다 · 손님이 기다린다");
         return;
       }
       if (st.phase === "walk") {
@@ -1717,8 +1728,8 @@ function selfPawn(back) {
 const CLOCK_X = 99;
 
 function selfRoomScene(e, back) {
-  // in from the counter room at the right edge; walking back out that way gives it up
-  const me = { x: A.RW - 16, facing: -1, walk: 0 };
+  // in by the passage at the left edge; walking back out that way gives it up
+  const me = { x: A.RL + 16, facing: 1, walk: 0 };
   let cam = camFor(me.x, A.RL, A.RW);
   let turns = 0;
   let seated = false;
@@ -1740,13 +1751,13 @@ function selfRoomScene(e, back) {
       if (!seated) {
         const dir = keyDir();
         if (dir) {
-          me.x = Math.max(A.RL + 12, me.x + dir * 62 * dt);
+          me.x = Math.min(A.RW - 12, me.x + dir * 62 * dt);
           me.facing = dir;
           me.walk += dt * 11;
         } else me.walk = 0;
       }
       cam += (camFor(me.x, A.RL, A.RW) - cam) * Math.min(1, dt * 6);
-      if (me.x >= A.RW - 8) return back();
+      if (me.x <= A.RL + 8) return back();
       if (spin > 0) {
         spin -= dt;
         windAngle += dt * 9;
@@ -1763,7 +1774,7 @@ function selfRoomScene(e, back) {
       } else if (near.chair && turns > 0) {
         tip(`E  의자에 앉아 손목을 묶는다 · ${wound}`);
         if (ePressed) go(selfChairScene({ mode: "extract", emotion: e, turns, done: (taken) => afterSelf(e, taken) }));
-      } else if (me.x > A.SPOTS.door - 20) tip(turns ? `→ 그만두고 창구 방으로 돌아간다 · ${wound}` : "← 태엽 장치로 간다 · → 창구 방으로 돌아간다");
+      } else if (me.x < A.SPOTS.door + 20) tip(turns ? `← 그만두고 돌아간다 · ${wound}` : "→ 태엽 장치로 간다 · ← 돌아간다");
       else tip(turns ? `← → 이동 · 의자에 앉는다 · ${wound}` : "← → 이동 · 태엽 장치로 간다");
     },
     draw(t) {
