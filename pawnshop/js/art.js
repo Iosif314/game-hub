@@ -24,23 +24,51 @@ export function drawCounter(b, t) {
   drawRulesPaper(b);
 }
 
-// a soft warm outline around something the mouse can use; drawn on the colour layer so it is not dithered
-export function drawGlow(c, x, y, w, h, t) {
-  const p = 0.55 + Math.sin(t * 5) * 0.25;
-  const warm = [255, 226, 160];
-  x = Math.round(x);
-  y = Math.round(y);
-  w = Math.round(w);
-  h = Math.round(h);
-  for (const [d, a] of [
-    [1, p],
-    [2, p * 0.35],
-  ]) {
-    crect(c, x - d, y - d, w + d * 2, 1, warm, a);
-    crect(c, x - d, y + h + d - 1, w + d * 2, 1, warm, a);
-    crect(c, x - d, y - d + 1, 1, h + d * 2 - 2, warm, a);
-    crect(c, x + w + d - 1, y - d + 1, 1, h + d * 2 - 2, warm, a);
+// a soft warm glow hugging the outline of something the mouse can use. `paint` draws the object's
+// silhouette into a hidden mask; the pixels just outside it light up (on the colour layer, so the
+// glow is not dithered away).
+const mask = document.createElement("canvas");
+mask.width = W;
+mask.height = H;
+const mctx = mask.getContext("2d", { willReadFrequently: true });
+const ring = new Uint8Array(W * H);
+
+export function drawGlow(c, paint, t) {
+  mctx.clearRect(0, 0, W, H);
+  mctx.fillStyle = "#fff";
+  paint(mctx);
+  const d = mctx.getImageData(0, 0, W, H).data;
+  const inside = (i) => d[i * 4 + 3] > 0;
+  ring.fill(0);
+  // first ring: empty pixels touching the shape; second ring: empty pixels touching the first
+  for (let pass = 1; pass <= 2; pass++) {
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (inside(i) || ring[i]) continue;
+        const near = (j) => (pass === 1 ? inside(j) : ring[j] === 1);
+        if ((x > 0 && near(i - 1)) || (x < W - 1 && near(i + 1)) || (y > 0 && near(i - W)) || (y < H - 1 && near(i + W))) ring[i] = pass;
+      }
+    }
   }
+  const p = 0.6 + Math.sin(t * 5) * 0.25;
+  const warm = [255, 226, 160];
+  for (let i = 0; i < W * H; i++) {
+    if (ring[i]) crect(c, i % W, Math.floor(i / W), 1, 1, warm, ring[i] === 1 ? p : p * 0.3);
+  }
+}
+
+// the solid outline of a jar: lid and body
+export function jarSilhouette(m, x, y, w, h) {
+  m.fillRect(x - 1, y - 5, w + 2, 5);
+  m.fillRect(x, y, w, h);
+}
+
+// the solid outline of the rules paper: the sheet and its pin
+export function rulesSilhouette(m) {
+  const { x, y, w, h } = RULES_PAPER;
+  m.fillRect(x, y, w, h);
+  m.fillRect(x + Math.floor(w / 2) - 1, y - 1, 3, 3);
 }
 
 // the guild's rules, pinned to the wall beside the grille
@@ -485,5 +513,5 @@ export function drawShelfJar(b, c, jar, i, t, hover) {
   drawGas(c, s.x, s.y, s.w, s.h, Math.min(1, jar.amount / 10), jar.emotion, t, i + 3);
   // the label sits in front of the gas, so it goes on the colour layer in the paper's sepia
   drawLabelPatch(c, s.x + 3, s.y + 9, s.w - 6, 7, jar.label.hand === "old");
-  if (hover) drawGlow(c, s.x - 2, s.y - 6, s.w + 4, s.h + 7, t);
+  if (hover) drawGlow(c, (m) => jarSilhouette(m, s.x, s.y, s.w, s.h), t);
 }

@@ -184,7 +184,7 @@ const counter = {
     if (this.cust) A.drawBust(b, this.cust.look, { t, expr: this.expr });
     A.drawGrille(b);
     A.drawCounterTop(b, t);
-    if (this.hoverRules) A.drawGlow(screen.color, A.RULES_PAPER.x, A.RULES_PAPER.y, A.RULES_PAPER.w, A.RULES_PAPER.h, t);
+    if (this.hoverRules) A.drawGlow(screen.color, A.rulesSilhouette, t);
     // after enough screams, the counter sometimes shows blood for a few frames
     if (S.extractions >= 2) {
       if (!fakeStain && Math.random() < dt / 25) fakeStain = { left: 0.12 + Math.random() * 0.1, x: 30 + Math.random() * 260, y: 116 + Math.random() * 40, seed: Math.floor(Math.random() * 1e6) };
@@ -1120,10 +1120,7 @@ function inspection() {
       A.drawRoomLight(screen.base, t);
       drawPerm(screen.color);
       const near = hoverAt && stainNear(hoverAt[0], hoverAt[1]);
-      if (near) {
-        const r = Math.ceil(near.r * (near.flat ? 1.8 : 1)) + 2;
-        A.drawGlow(screen.color, near.x - r, near.y - r, r * 2 + 1, r * 2 + 1 + (near.drip || 0), t);
-      }
+      if (near) A.drawGlow(screen.color, (m) => drawSplat(m, { ...near, a: 1 }), t);
       if (scrubAt) rect(screen.base, scrubAt[0] - 3, scrubAt[1] - 2, 6, 4, 200);
     },
   });
