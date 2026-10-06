@@ -1,8 +1,8 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006g";
-import * as A from "./art.js?v=20261006g";
-import { ROOM } from "./art.js?v=20261006g";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006g";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006g";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006h";
+import * as A from "./art.js?v=20261006h";
+import { ROOM } from "./art.js?v=20261006h";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006h";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006h";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -781,7 +781,7 @@ function chairScene(o) {
         return;
       }
       if (st.phase === "ready") {
-        if (near.crank) tip(injecting ? "E 또는 Space를 누르고 있으면 발전기가 거꾸로 돈다" : "E 또는 Space를 누르고 있으면 발전기가 돈다 · 손을 떼면 멈춘다");
+        if (near.crank) tip(injecting ? "E·Space 누르고 있기: 발전기를 거꾸로 돌린다" : "E·Space 누르고 있기: 발전기를 돌린다 · 떼면 멈춘다");
         else tip("← 발전기로 간다");
       }
       if (st.phase === "after") {

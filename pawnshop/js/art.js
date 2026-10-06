@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006g";
-import { EMOTIONS } from "./data.js?v=20261006g";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006h";
+import { EMOTIONS } from "./data.js?v=20261006h";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -253,13 +253,13 @@ export function drawBust(b, look, { x = 160, y = 112, t = 0, expr = "neutral" } 
 export const ROOM = {
   floor: 130,
   chairX: 120,
-  head: { x: 138, y: 62 },
-  jar: { x: 252, y: 74, w: 32, h: 44 },
+  head: { x: 138, y: 74 },
+  jar: { x: 254, y: 66, w: 24, h: 30 },
   tube: [
-    [141, 52],
+    [141, 64],
     [141, 22],
-    [268, 22],
-    [268, 72],
+    [266, 22],
+    [266, 60],
   ],
   apron: { x: 4, y: 70, w: 22, h: 60 },
 };
@@ -280,10 +280,12 @@ export function drawRoom(b, t) {
   // the old master's clockwork, between the generator and the chair
   drawClockwork(b, 86, 108);
   // workbench
-  rect(b, 228, 118, 84, 5, 92);
-  rect(b, 232, 123, 4, 7, 70);
-  rect(b, 304, 123, 4, 7, 70);
-  rect(b, 296, 104, 10, 14, 120);
+  rect(b, 228, 96, 84, 5, 92);
+  rect(b, 228, 96, 84, 1, 120);
+  rect(b, 232, 101, 4, 29, 70);
+  rect(b, 304, 101, 4, 29, 70);
+  rect(b, 236, 116, 68, 3, 60);
+  rect(b, 292, 84, 10, 12, 120);
   // the tube: copper from the head, glass along the ceiling
   const p = ROOM.tube;
   for (let i = 0; i < p.length - 1; i++) {
@@ -300,7 +302,7 @@ export function drawRoom(b, t) {
   }
   for (const [x, y] of [
     [141, 22],
-    [268, 22],
+    [266, 22],
   ])
     rect(b, x - 2, y - 2, 5, 5, 96);
 }
@@ -350,17 +352,19 @@ export function drawChair(b) {
   rect(b, x + 4, f - 22, 34, 4, 74);
   rect(b, x + 6, f - 18, 3, 18, 60);
   rect(b, x + 33, f - 18, 3, 18, 60);
-  rect(b, x + 32, 40, 5, f - 62, 66);
-  rect(b, x + 31, 38, 7, 3, 90);
+  rect(b, x + 32, 52, 5, f - 74, 66);
+  rect(b, x + 31, 50, 7, 3, 90);
   rect(b, x + 6, 90, 28, 3, 78);
   rect(b, x + 7, 93, 3, 15, 64);
   // headrest, electrodes, buckles
-  rect(b, x + 26, 48, 6, 20, 58);
+  rect(b, x + 26, 60, 6, 20, 58);
 }
 
 // the person in the chair. pose: shake (0..1), scream (0..1), back (head thrown back 0..1),
 // face: "calm" | "smile" | "scream" | "wail" | "laugh" | "cower" | "embrace" | "blank"
-export function drawSitter(b, look, pose, t) {
+export function drawSitter(b, look0, pose, t) {
+  // the same lighter clothes as on foot, so the seated figure reads against the chair
+  const look = { ...look0, coat: Math.max(86, Math.min(170, look0.coat + 46)) };
   const r = Math.random;
   const sx = pose.shake ? (r() - 0.5) * 4 * pose.shake : 0;
   const sy = (pose.shake ? (r() - 0.5) * 3 * pose.shake : 0) + (pose.dy || 0);
@@ -378,9 +382,9 @@ export function drawSitter(b, look, pose, t) {
   rect(b, kneeX - 1, f - 14, 8, 3, 110);
   // torso
   const tx = x + 22 + sx;
-  const ty = 70 + (look.child ? 8 : 0) + sy + cower * 6;
+  const ty = 80 + (look.child ? 6 : 0) + sy + cower * 4;
   const lean = pose.back * 3 - cower * 6 + (pose.face === "laugh" ? Math.sin(t * 18) * 2 : 0);
-  for (let i = 0; i < 38; i++) rect(b, tx - 7 + lean * (1 - i / 38), ty + i, 15, 1, look.coat);
+  for (let i = 0; i < 28; i++) rect(b, tx - 7 + lean * (1 - i / 28), ty + i, 15, 1, look.coat);
   // arm along the armrest, hand clawing at its end
   const claw = pose.scream > 0.3 ? Math.round(r()) : 0;
   const armX = pose.face === "embrace" ? tx - 16 : x + 8;
@@ -626,16 +630,16 @@ export const SPOTS = { crank: 22, chair: 146, seat: ROOM.chairX + 22, door: DOOR
 
 export function drawDoor(b, t) {
   const { x, w } = DOOR;
-  rect(b, x - 3, 44, w + 6, ROOM.floor - 44, 64);
-  rect(b, x, 48, w, ROOM.floor - 48, 14);
+  rect(b, x - 3, 30, w + 6, ROOM.floor - 30, 64);
+  rect(b, x, 34, w, ROOM.floor - 34, 14);
   // the shop beyond, lamplit
   const g = b.createLinearGradient(x, 0, x + w, 0);
   g.addColorStop(0, "rgba(255,255,255,0)");
   g.addColorStop(1, "rgba(255,255,255,0.18)");
   b.fillStyle = g;
-  b.fillRect(x, 48, w, ROOM.floor - 48);
+  b.fillRect(x, 34, w, ROOM.floor - 34);
   // the door itself, swung open against the wall
-  rect(b, x + w + 3, 46, 6, ROOM.floor - 46, 50);
+  rect(b, x + w + 3, 32, 6, ROOM.floor - 32, 50);
   rect(b, x + w + 4, 90, 2, 3, 120);
 }
 
@@ -659,20 +663,20 @@ export function drawWalker(b, look0, x, facing, walk = 0, { armTo = null, expr =
 
 function walker(b, look, x, facing, walk, armTo, expr, oy, flat) {
   const T = (v) => (flat === null ? v : flat);
-  const s = look.child ? 0.8 : look.big ? 1.08 : 1;
+  const s = look.child ? 0.85 : look.big ? 1.25 : 1.15;
   const f = ROOM.floor + oy;
   const stride = walk ? Math.sin(walk) : 0;
   const bob = walk ? Math.abs(Math.cos(walk)) * 1 : 0;
-  const hip = f - 26 * s - bob;
+  const hip = f - 30 * s - bob;
   for (const k of [-1, 1]) {
     const off = stride * 3 * k;
-    rect(b, x - 2 + off, hip, 4, f - hip - 1, T(look.coat - 24));
-    rect(b, x - 2 + off + (facing > 0 ? 0 : -2), f - 2, 6, 2, T(22));
+    rect(b, x - 2.5 + off, hip, 5, f - hip - 1, T(look.coat - 24));
+    rect(b, x - 2.5 + off + (facing > 0 ? 0 : -2), f - 2, 7, 2, T(22));
   }
-  const top = hip - 26 * s;
-  rect(b, x - 6 * s, top, 12 * s, hip - top + 2, T(look.coat));
-  if (look.apron) rect(b, x + (facing > 0 ? 1 : -6), top + 6, 5, hip - top - 2, T(196));
-  if (look.hat === "shawl" || look.hat === "bonnet") rect(b, x - 7 * s, top - 1, 14 * s, 9, T(look.coat + 18));
+  const top = hip - 27 * s;
+  rect(b, x - 7 * s, top, 14 * s, hip - top + 2, T(look.coat));
+  if (look.apron) rect(b, x + (facing > 0 ? 1 : -8), top + 7, 7, hip - top + 6, T(196));
+  if (look.hat === "shawl" || look.hat === "bonnet") rect(b, x - 8 * s, top - 1, 16 * s, 10, T(look.coat + 18));
   const sx = x + facing * 2;
   const sy = top + 4;
   if (armTo) {
@@ -680,46 +684,46 @@ function walker(b, look, x, facing, walk, armTo, expr, oy, flat) {
     for (let i = 0; i <= 8; i++) {
       const px = sx + ((armTo[0] - sx) * i) / 8;
       const py = sy + ((ay - sy) * i) / 8;
-      rect(b, px - 1.5, py - 1.5, 3, 3, T(look.coat - 16));
+      rect(b, px - 2, py - 2, 4, 4, T(look.coat - 16));
     }
-    rect(b, armTo[0] - 2, ay - 2, 4, 4, T(look.skin));
+    rect(b, armTo[0] - 2.5, ay - 2.5, 5, 5, T(look.skin));
   } else {
     const ax = sx - facing * stride * 3;
-    rect(b, ax - 1.5, sy, 3, 15 * s, T(look.coat - 16));
-    rect(b, ax - 1.5, sy + 15 * s, 3, 3, T(look.skin));
+    rect(b, ax - 2, sy, 4, 17 * s, T(look.coat - 16));
+    rect(b, ax - 2, sy + 17 * s, 4, 4, T(look.skin));
   }
-  const hy = top - 7 * s;
-  ellipse(b, x, hy, 5 * s, 6 * s, T(look.skin));
+  const hy = top - 8 * s;
+  ellipse(b, x, hy, 6.5 * s, 7.5 * s, T(look.skin));
   if (flat === null) {
-    rect(b, x + facing * 5 * s, hy, 1, 2, look.skin - 20);
-    rect(b, x + facing * 3 * s, hy - 2, 1, 1, 16);
-    if (expr === "smile") rect(b, x + facing * 3 * s - (facing > 0 ? 0 : 1), hy + 3, 2, 1, 60);
-    else rect(b, x + facing * 3 * s, hy + 3, 1, 1, 70);
+    rect(b, x + facing * 6.5 * s, hy, 1, 2, look.skin - 20);
+    rect(b, x + facing * 4 * s, hy - 2, 1, 2, 16);
+    if (expr === "smile") rect(b, x + facing * 4 * s - (facing > 0 ? 0 : 1), hy + 4, 2, 1, 60);
+    else rect(b, x + facing * 4 * s, hy + 4, 2, 1, 70);
   }
   const hair = look.hair !== undefined ? look.hair : 40;
   if (look.hat === "top") {
-    rect(b, x - 5 * s, hy - 16 * s, 10 * s, 11 * s, T(22));
-    rect(b, x - 7 * s, hy - 6 * s, 14 * s, 1, T(22));
+    rect(b, x - 6 * s, hy - 18 * s, 12 * s, 12 * s, T(22));
+    rect(b, x - 9 * s, hy - 7 * s, 18 * s, 2, T(22));
   } else if (look.hat === "bowler") {
-    ellipse(b, x, hy - 6 * s, 5 * s, 4 * s, T(26));
-    rect(b, x - 7 * s, hy - 4 * s, 14 * s, 1, T(26));
+    ellipse(b, x, hy - 7 * s, 6.5 * s, 4.5 * s, T(26));
+    rect(b, x - 9 * s, hy - 5 * s, 18 * s, 2, T(26));
   } else if (look.hat === "cap") {
-    rect(b, x - 5 * s, hy - 7 * s, 10 * s, 3, T(40));
-    rect(b, x + facing * 3 * s, hy - 5 * s, facing * 5, 1, T(34));
+    rect(b, x - 6.5 * s, hy - 8 * s, 13 * s, 4, T(40));
+    rect(b, x + facing * 4 * s, hy - 5 * s, facing * 6, 2, T(34));
   } else if (look.hat === "shako") {
-    rect(b, x - 5 * s, hy - 15 * s, 10 * s, 10 * s, T(30));
-    rect(b, x - 1, hy - 18 * s, 2, 3, T(180));
+    rect(b, x - 6 * s, hy - 17 * s, 12 * s, 11 * s, T(30));
+    rect(b, x - 1, hy - 20 * s, 2, 4, T(180));
   } else if (look.hat === "feather") {
-    ellipse(b, x, hy - 6 * s, 6 * s, 2, T(40));
-    line(b, x - facing * 2, hy - 7 * s, x - facing * 8, hy - 14 * s, T(200));
+    ellipse(b, x, hy - 7 * s, 7.5 * s, 2.5, T(40));
+    line(b, x - facing * 2, hy - 8 * s, x - facing * 10, hy - 16 * s, T(200));
   } else if (look.hat === "bonnet" || look.hat === "shawl") {
-    ellipse(b, x - facing, hy - 2, 7 * s, 8 * s, T(look.hat === "bonnet" ? 22 : look.coat + 18));
-    ellipse(b, x + facing, hy + 1, 4 * s, 5 * s, T(look.skin));
-    if (flat === null) rect(b, x + facing * 2 * s, hy, 1, 1, 16);
+    ellipse(b, x - facing, hy - 2, 8.5 * s, 9.5 * s, T(look.hat === "bonnet" ? 22 : look.coat + 18));
+    ellipse(b, x + facing * 1.5, hy + 1, 5 * s, 6 * s, T(look.skin));
+    if (flat === null) rect(b, x + facing * 3 * s, hy - 1, 1, 2, 16);
   } else {
-    ellipse(b, x - facing, hy - 3 * s, 5 * s, 4 * s, T(hair));
+    ellipse(b, x - facing * 1.5, hy - 3.5 * s, 6.5 * s, 4.5 * s, T(hair));
   }
-  if (look.beard) rect(b, x + facing * s - 2, hy + 3, 5, 3, T(hair));
+  if (look.beard) rect(b, x + facing * 1.5 * s - 3, hy + 3, 7, 4, T(hair));
 }
 
 // silhouettes for the "you can use this" glow
@@ -729,11 +733,11 @@ export function chairSilhouette(m) {
   m.fillRect(x + 4, f - 22, 34, 4);
   m.fillRect(x + 6, f - 18, 3, 18);
   m.fillRect(x + 33, f - 18, 3, 18);
-  m.fillRect(x + 32, 40, 5, f - 62);
-  m.fillRect(x + 31, 38, 7, 3);
+  m.fillRect(x + 32, 52, 5, f - 74);
+  m.fillRect(x + 31, 50, 7, 3);
   m.fillRect(x + 6, 90, 28, 3);
   m.fillRect(x + 7, 93, 3, 15);
-  m.fillRect(x + 26, 48, 6, 20);
+  m.fillRect(x + 26, 60, 6, 20);
 }
 
 export function generatorSilhouette(m) {
