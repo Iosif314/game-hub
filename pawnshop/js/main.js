@@ -1,8 +1,8 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js";
-import * as A from "./art.js";
-import { ROOM } from "./art.js";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006b";
+import * as A from "./art.js?v=20261006b";
+import { ROOM } from "./art.js?v=20261006b";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006b";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js?v=20261006b";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
