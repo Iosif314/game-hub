@@ -21,6 +21,29 @@ export function drawCounter(b, t) {
   // window frame and the dim street side behind the grille
   rect(b, 92, 8, 136, 106, 92);
   rect(b, 98, 14, 124, 98, 24);
+  drawRulesPaper(b);
+}
+
+// the guild's rules, pinned to the wall beside the grille
+export const RULES_PAPER = { x: 240, y: 18, w: 42, h: 58 };
+
+function drawRulesPaper(b) {
+  const { x, y, w, h } = RULES_PAPER;
+  rect(b, x + 2, y + 2, w, h, 28);
+  rect(b, x, y, w, h, 186);
+  rect(b, x, y + h - 3, w, 3, 160);
+  rect(b, x + w - 3, y, 3, h, 166);
+  // a heading, three numbered rules, the guild's seal
+  rect(b, x + 7, y + 6, w - 14, 2, 70);
+  for (let i = 0; i < 3; i++) {
+    const ly = y + 15 + i * 10;
+    rect(b, x + 5, ly, 2, 2, 60);
+    rect(b, x + 9, ly, w - 16, 1, 104);
+    rect(b, x + 9, ly + 3, w - 22 - i * 3, 1, 104);
+  }
+  ellipse(b, x + w - 11, y + h - 11, 5, 5, 120);
+  ellipse(b, x + w - 11, y + h - 11, 3, 3, 150);
+  rect(b, x + w / 2 - 1, y - 1, 3, 3, 90);
 }
 
 export function drawGrille(b) {

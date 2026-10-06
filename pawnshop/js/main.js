@@ -142,9 +142,39 @@ function go(s) {
 
 // --- the counter ---
 let fakeStain = null; // a splash on the counter that is not there
+// the rules pinned beside the grille, read by clicking the paper
+const onRules = (x, y) => {
+  const r = A.RULES_PAPER;
+  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+};
+function showRules() {
+  sfx.paper();
+  panel(
+    `<div class="paper rules">
+       <div class="masthead">공장 도시 전당업 조합</div>
+       <div class="headline">감정 추출 규정</div>
+       <div>하나. 열여섯 살 미만의 감정은 거래하지 않는다.</div>
+       <div>둘. 본인의 뜻이 아닌 추출은 하지 않는다.</div>
+       <div>셋. 한 감정을 바닥까지 뽑지 않는다.</div>
+       <div class="notice">어긴 자의 면허는 조합이 거둔다.</div>
+     </div>`,
+    [{ label: "닫기", fn: closePanel }],
+    "center",
+  );
+}
+
 const counter = {
   cust: null,
   expr: "neutral",
+  move(x, y) {
+    view.style.cursor = onRules(x, y) ? "pointer" : "";
+  },
+  down(x, y) {
+    if (onRules(x, y)) showRules();
+  },
+  leave() {
+    view.style.cursor = "";
+  },
   draw(t, dt) {
     const b = screen.base;
     A.drawCounter(b, t);
