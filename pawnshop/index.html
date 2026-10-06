@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>감정 전당포 · 시험판</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.39.3/dist/galmuri.css" />
-  <link rel="stylesheet" href="css/style.css?v=20261006d" />
+  <link rel="stylesheet" href="css/style.css?v=20261006e" />
 </head>
 <body>
   <div id="stage">
@@ -32,6 +32,26 @@
       <div class="hint">클릭해서 시작</div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=20261006d"></script>
+  <script>
+    // GitHub Pages lets browsers keep this page for up to ten minutes, and a reload does not always
+    // fetch it again. Ask the server directly which build is current, and if it is newer than this
+    // one, load that build instead (once per build, so it can never loop).
+    (function () {
+      var build = "20261006e";
+      fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          var m = html.match(/main\.js\?v=([0-9a-z]+)/);
+          if (!m || m[1] === build) return;
+          try {
+            if (sessionStorage.getItem("loaded-" + m[1])) return;
+            sessionStorage.setItem("loaded-" + m[1], "1");
+          } catch (e) {}
+          location.replace(location.pathname + "?v=" + m[1]);
+        })
+        .catch(function () {});
+    })();
+  </script>
+  <script type="module" src="js/main.js?v=20261006e"></script>
 </body>
 </html>
