@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006n";
-import { EMOTIONS } from "./data.js?v=20261006n";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006p";
+import { EMOTIONS } from "./data.js?v=20261006p";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -265,7 +265,7 @@ export const ROOM = {
   apron: { x: 4, y: 70, w: 22, h: 60 },
 };
 
-export function drawRoom(b, t, clockAngle = 0) {
+export function drawRoom(b, t, clockAngle = 0, bellSince = -10) {
   rect(b, 0, 0, RW, ROOM.floor, 30);
   for (let x = 6; x < RW; x += 11) rect(b, x, 0, 1, 100, 25);
   rect(b, 0, 100, RW, 30, 40);
@@ -277,6 +277,7 @@ export function drawRoom(b, t, clockAngle = 0) {
   rect(b, 186, 30, 26, 32, 70);
   rect(b, 189, 33, 20, 26, 104);
   for (let x = 193; x < 209; x += 6) rect(b, x, 33, 1, 26, 60);
+  drawFront(b, t, bellSince);
   drawDoor(b, t);
   // the old master's clockwork, between the generator and the chair
   drawClockwork(b, 86, 108, clockAngle);
@@ -321,6 +322,13 @@ export function drawRoomLight(b, t, power = 1) {
   b.globalCompositeOperation = "lighter";
   b.fillStyle = g;
   b.fillRect(0, 0, RW, H);
+  const c = FRONT.counter + 2;
+  const g2 = b.createRadialGradient(c, 24, 4, c, 80, 140);
+  g2.addColorStop(0, `rgba(255,255,255,${0.32 * f})`);
+  g2.addColorStop(0.5, `rgba(255,255,255,${0.12 * f})`);
+  g2.addColorStop(1, "rgba(255,255,255,0)");
+  b.fillStyle = g2;
+  b.fillRect(FRONT.x, 0, RW - FRONT.x, H);
   b.globalCompositeOperation = "source-over";
 }
 
@@ -626,9 +634,101 @@ export const ROOM_SELF = {
 };
 
 // --- walking about the back room (side view) ---
-export const RW = 400; // the back room is wider than the screen; the camera follows me
-export const DOOR = { x: 352, w: 30 }; // the way in from the shop
-export const SPOTS = { crank: 22, chair: 146, seat: ROOM.chairX + 22, door: DOOR.x + DOOR.w / 2 };
+export const RW = 640; // back room on the left, the shop front on the right; the camera follows me
+export const DOOR = { x: 352, w: 30 }; // the way through from the shop front to the back room
+export const FRONT = { x: 392, counter: 532, street: 598 }; // the shop front: grille counter, street door
+export const SPOTS = {
+  crank: 22,
+  chair: 146,
+  seat: ROOM.chairX + 22,
+  door: DOOR.x + DOOR.w / 2,
+  rules: 508, // the guild rules pinned on the wall
+  counter: 520, // where I stand to serve at the grille
+  window: 584, // where a customer waits on the street side
+  street: 612, // the street door
+};
+
+// the shop front, seen from the side: a lamplit room with the grille counter across it, the street
+// door beyond, the guild rules on the wall and a shelf of empty jars
+function drawFront(b, t, bellSince) {
+  const fx = FRONT.x;
+  rect(b, fx, 0, RW - fx, 100, 40);
+  for (let x = fx + 5; x < RW; x += 11) rect(b, x, 0, 1, 100, 35);
+  rect(b, fx, 100, RW - fx, 30, 52);
+  for (let x = fx; x < RW; x += 16) rect(b, x, 100, 1, 30, 44);
+  rect(b, fx, 100, RW - fx, 2, 84);
+  rect(b, fx, 0, 5, ROOM.floor, 20);
+  // a shelf of empty jars waiting for the cellar
+  rect(b, 418, 62, 60, 3, 92);
+  rect(b, 422, 65, 2, 6, 60);
+  rect(b, 472, 65, 2, 6, 60);
+  for (let i = 0; i < 4; i++) drawJar(b, 424 + i * 13, 50, 9, 12, { marks: false });
+  // the guild rules
+  const r = FRONT_RULES;
+  rect(b, r.x + 1, r.y + 1, r.w, r.h, 22);
+  rect(b, r.x, r.y, r.w, r.h, 196);
+  rect(b, r.x + 3, r.y + 3, r.w - 6, 2, 120);
+  for (let y = r.y + 8; y < r.y + r.h - 3; y += 3) rect(b, r.x + 2, y, r.w - 4 - ((y * 7) % 5), 1, 150);
+  rect(b, r.x + r.w / 2 - 1, r.y - 1, 2, 2, 240);
+  // the street door, shut, a little light through its pane
+  const d = FRONT.street;
+  rect(b, d - 3, 30, 32, ROOM.floor - 30, 30);
+  rect(b, d, 34, 26, ROOM.floor - 34, 62);
+  rect(b, d + 5, 42, 16, 22, 120);
+  rect(b, d + 12, 42, 1, 22, 62);
+  rect(b, d + 5, 52, 16, 1, 62);
+  rect(b, d + 4, 86, 3, 3, 150);
+  // the grille counter: a solid panel under the ceiling beam, a barred window, the counter below
+  const c = FRONT.counter;
+  rect(b, c + 8, 22, 16, 28, 58);
+  rect(b, c + 8, 22, 16, 1, 100);
+  rect(b, c + 10, 26, 12, 20, 50);
+  rect(b, c + 8, 50, 16, 2, 110);
+  rect(b, c + 8, 50, 1, 46, 110);
+  rect(b, c + 23, 50, 1, 46, 90);
+  for (let x = c + 11; x < c + 23; x += 3) rect(b, x, 52, 1, 44, 132);
+  rect(b, c + 8, 73, 16, 1, 110);
+  rect(b, c - 4, 96, 40, 4, 124);
+  rect(b, c - 4, 96, 40, 1, 176);
+  rect(b, c - 4, 99, 40, 1, 70);
+  rect(b, c, 100, 32, ROOM.floor - 100, 86);
+  rect(b, c, 100, 1, ROOM.floor - 100, 40);
+  rect(b, c + 31, 100, 1, ROOM.floor - 100, 40);
+  rect(b, c + 4, 104, 24, 9, 70);
+  rect(b, c + 4, 117, 24, 9, 70);
+  rect(b, c + 4, 104, 24, 1, 104);
+  rect(b, c + 4, 117, 24, 1, 104);
+  // the bell, on the street side of the grille
+  const ringing = bellSince >= 0 && bellSince < 0.5;
+  const bx = c + 28 + (ringing ? Math.round(Math.sin(bellSince * 60) * (1 - bellSince / 0.5)) : 0);
+  ellipse(b, bx, 94, 4, 3, 150);
+  rect(b, bx - 5, 95, 10, 1, 96);
+  rect(b, bx - 1, 90, 2, 1, 140);
+  rect(b, bx - 2, 93, 1, 1, 220);
+  if (ringing) {
+    const k = Math.floor(bellSince * 10) % 2;
+    rect(b, bx - 8 - k, 91, 2, 1, 220);
+    rect(b, bx + 7 + k, 91, 2, 1, 220);
+    rect(b, bx - 6, 87 - k, 1, 2, 220);
+    rect(b, bx + 6, 87 - k, 1, 2, 220);
+  }
+  // the lamp over the counter
+  rect(b, c + 2, 0, 1, 14, 60);
+  rect(b, c - 2, 14, 9, 4, 80);
+  rect(b, c, 18, 5, 3, 250);
+}
+const FRONT_RULES = { x: 500, y: 44, w: 16, h: 20 };
+export function frontRulesSilhouette(m) {
+  const r = FRONT_RULES;
+  m.fillRect(r.x, r.y - 1, r.w, r.h + 1);
+}
+export function counterSilhouette(m) {
+  const c = FRONT.counter;
+  m.fillRect(c + 8, 22, 16, 74);
+  m.fillRect(c - 4, 96, 40, 4);
+  m.fillRect(c, 100, 32, ROOM.floor - 100);
+  m.fillRect(c + 23, 90, 10, 6);
+}
 
 export function drawDoor(b, t) {
   const { x, w } = DOOR;

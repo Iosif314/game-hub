@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006n";
-import * as A from "./art.js?v=20261006n";
-import { ROOM } from "./art.js?v=20261006n";
-import { createSelf3D } from "./self3d.js?v=20261006n";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006n";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006n";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006p";
+import * as A from "./art.js?v=20261006p";
+import { ROOM } from "./art.js?v=20261006p";
+import { createSelf3D } from "./self3d.js?v=20261006p";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006p";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006p";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -211,52 +211,159 @@ const counter = {
   },
 };
 
-function toCounter() {
+// --- the shop, side on: back room to the left, the grille counter to the right ---
+// where I stand, kept between scenes so I come back to the same spot
+const keeper = { x: A.SPOTS.counter - 50, facing: 1 };
+const keyDir = () => (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0);
+
+function stepToward(p, x, speed, dt) {
+  const d = x - p.x;
+  if (Math.abs(d) < 1) {
+    p.walk = 0;
+    return true;
+  }
+  p.x += Math.sign(d) * Math.min(Math.abs(d), speed * dt);
+  p.facing = Math.sign(d);
+  p.walk += dt * 11;
+  return false;
+}
+
+// whoever is coming in or waiting at the grille, until I answer the bell
+let arrival = null;
+
+const shop = {
+  me: { x: 0, facing: 1, walk: 0 },
+  cam: 0,
+  bellAt: -10,
+  leavers: [], // people on their way out to the street
+  near: { counter: false, rules: false },
+  enter() {
+    hud();
+    hideDialog();
+    this.me.x = keeper.x;
+    this.me.facing = keeper.facing;
+    this.me.walk = 0;
+    this.cam = Math.max(0, Math.min(A.RW - W, this.me.x - W / 2));
+  },
+  leave() {
+    keeper.x = this.me.x;
+    keeper.facing = this.me.facing;
+    tip("");
+  },
+  update(dt, t) {
+    const me = this.me;
+    const busy = !pnl.classList.contains("hidden");
+    const dir = busy ? 0 : keyDir();
+    if (dir) {
+      me.x = Math.max(12, Math.min(A.SPOTS.counter + 4, me.x + dir * 62 * dt));
+      me.facing = dir;
+      me.walk += dt * 11;
+    } else me.walk = 0;
+    const target = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
+    this.cam += (target - this.cam) * Math.min(1, dt * 6);
+    for (const p of this.leavers) p.gone = stepToward(p, A.SPOTS.street, 58, dt);
+    this.leavers = this.leavers.filter((p) => !p.gone);
+
+    // someone comes in off the street, steps up to the grille, and rings
+    const a = arrival;
+    if (a) {
+      if (a.state === "outside") {
+        a.wait -= dt;
+        if (a.wait <= 0) {
+          a.state = "in";
+          sfx.steps();
+        }
+      } else if (a.state === "in") {
+        if (stepToward(a.guest, A.SPOTS.window, 50, dt)) {
+          a.guest.facing = -1;
+          a.state = "waiting";
+          a.ringIn = 1;
+        }
+      } else if (a.state === "waiting") {
+        a.ringIn -= dt;
+        if (a.ringIn <= 0) {
+          sfx.bell();
+          this.bellAt = t;
+          a.rung++;
+          a.ringIn = 9; // left waiting, they ring again
+        }
+      }
+    }
+
+    this.near.counter = Math.abs(me.x - A.SPOTS.counter) < 18;
+    this.near.rules = Math.abs(me.x - A.SPOTS.rules) < 12;
+    if (busy) return;
+    const ringing = a && a.rung > 0;
+    if (this.near.counter && ringing) {
+      tip("E  응대한다");
+      if (ePressed) serve(a);
+    } else if (this.near.rules) {
+      tip("E  조합 규정을 읽는다");
+      if (ePressed) showRules();
+    } else if (ringing) tip(`${a.rung > 1 ? "딸랑, 딸랑— 손님이 다시 벨을 울린다" : "딸랑— 손님이 창구의 벨을 울렸다"} · → 창구로 간다`);
+    else tip("← → 이동");
+  },
+  draw(t) {
+    const b = screen.base;
+    const c = screen.color;
+    const cx = Math.round(this.cam);
+    b.save();
+    c.save();
+    b.translate(-cx, 0);
+    c.translate(-cx, 0);
+    A.drawRoom(b, t, 0, t - this.bellAt);
+    A.drawGenerator(b, 0);
+    A.drawChair(b);
+    const j = ROOM.jar;
+    A.drawJar(b, j.x, j.y, j.w, j.h, {});
+    for (const p of this.leavers) A.drawWalker(b, p.look, p.x, p.facing, p.walk);
+    const a = arrival;
+    if (a && a.state !== "outside") A.drawWalker(b, PEOPLE[a.v.who].look, a.guest.x, a.guest.facing, a.guest.walk);
+    A.drawWalker(b, A.KEEPER, this.me.x, this.me.facing, this.me.walk);
+    A.drawRoomLight(b, t);
+    if (!lacks("guilt")) drawPerm(c);
+    b.restore();
+    c.restore();
+    const glow = (paint) => A.drawGlow(c, (m) => (m.save(), m.translate(-cx, 0), paint(m), m.restore()), t);
+    if (this.near.counter && a && a.rung > 0) glow(A.counterSilhouette);
+    if (this.near.rules) glow(A.frontRulesSilhouette);
+  },
+};
+
+function toShop() {
   counter.cust = null;
-  go(counter);
+  go(shop);
+  nextVisit();
+}
+
+// done at the grille: they turn and go out to the street, and the next one comes
+function leaveCounter() {
+  const p = counter.cust;
+  counter.cust = null;
+  hideDialog();
+  go(shop);
+  if (p) shop.leavers.push({ look: p.look, x: A.SPOTS.window, facing: 1, walk: 0 });
   nextVisit();
 }
 
 function nextVisit() {
   hud();
-  tip("");
   const v = S.queue.shift();
   if (!v) {
-    counter.cust = null;
-    hideDialog();
+    arrival = null;
     go(evening);
     return;
   }
   if (v.needs && !jarOf(v.needs)) return nextVisit();
-  // the window stays empty a moment; then footsteps, someone at the grille, and the bell
-  counter.cust = null;
-  hideDialog();
-  const a = (arrival = { v, timers: [], served: false });
-  const later = (ms, fn) => a.timers.push(setTimeout(() => arrival === a && scene === counter && fn(), ms));
-  later(900 + Math.random() * 1200, () => {
-    sfx.steps();
-    counter.cust = PEOPLE[v.who];
-    counter.expr = v.kind === "last" ? "sad" : "neutral";
-    counter.arrivedAt = performance.now() / 1000;
-    later(1500, () => ringBell(a, false));
-  });
-}
-
-// whoever is waiting at the grille, until I answer the bell
-let arrival = null;
-
-function ringBell(a, again) {
-  sfx.bell();
-  counter.bellAt = performance.now() / 1000;
-  choose(again ? "딸랑, 딸랑— 손님이 다시 벨을 울린다." : "딸랑— 손님이 창구의 벨을 울렸다.", [{ label: "응대한다", fn: () => serve(a) }], "");
-  // left waiting, they ring again
-  a.timers.push(setTimeout(() => arrival === a && scene === counter && !a.served && ringBell(a, true), 9000));
+  arrival = { v, state: "outside", wait: 1.5 + Math.random() * 1.5, guest: { x: A.SPOTS.street, facing: -1, walk: 0 }, rung: 0, ringIn: 0 };
 }
 
 function serve(a) {
-  a.served = true;
-  for (const id of a.timers) clearTimeout(id);
   arrival = null;
+  counter.cust = PEOPLE[a.v.who];
+  counter.expr = a.v.kind === "last" ? "sad" : "neutral";
+  counter.arrivedAt = 0;
+  go(counter);
   const run = { pawn: pawnFlow, last: pawnFlow, buy: buyFlow, redeem: redeemFlow, sell: sellFlow, blackmail: blackmailFlow }[a.v.kind];
   run(a.v);
 }
@@ -364,8 +471,7 @@ function refuse(v) {
   counter.expr = "sad";
   note(`${p.name}을(를) 돌려보냈다`);
   say(p.name, [v.refuse || "……"], () => {
-    counter.cust = null;
-    setTimeout(nextVisit, 500);
+    leaveCounter();
   });
 }
 
@@ -432,10 +538,7 @@ function offerJar(v, jar) {
             hideDialog();
             go(chairScene({ mode: "inject", who: v.who, emotion: jar.emotion, amount: jar.amount, done: (res) => afterChair(v, res, toCounterNext) }));
           } else {
-            say(p.name, [v.after], () => {
-              counter.cust = null;
-              setTimeout(nextVisit, 500);
-            });
+            say(p.name, [v.after], leaveCounter);
           }
         },
       },
@@ -445,10 +548,10 @@ function offerJar(v, jar) {
   );
 }
 
+// back from the chair: they have already gone out
 function toCounterNext() {
   counter.cust = null;
-  go(counter);
-  setTimeout(nextVisit, 500);
+  leaveCounter();
 }
 
 function removeJar(jar) {
@@ -462,8 +565,7 @@ function redeemFlow(v) {
   const pay = own ? Math.round(own.pawn.loan * (1 + own.pawn.rate / 100)) : 0;
   if (!own) {
     say(p.name, ["……맡긴 게 없다고? 그럴 리가."], () => {
-      counter.cust = null;
-      setTimeout(nextVisit, 500);
+      leaveCounter();
     });
     return;
   }
@@ -565,8 +667,7 @@ function blackmailMenu(v) {
           removeJar(jarOf(v.needs));
           note(`넬리의 병을 아버지에게 넘겼다`);
           say(p.name, [v.give], () => {
-            counter.cust = null;
-            setTimeout(nextVisit, 500);
+            leaveCounter();
           });
         },
       },
@@ -576,8 +677,7 @@ function blackmailMenu(v) {
           S.flags.reported = true;
           note(`넬리의 아버지를 돌려보냈다`);
           say(p.name, [v.refuse], () => {
-            counter.cust = null;
-            setTimeout(nextVisit, 500);
+            leaveCounter();
           });
         },
       },
@@ -666,9 +766,9 @@ function chairScene(o) {
     burst: 0,
   };
   const emo = EMOTIONS[o.emotion];
-  // me and the customer, walking in from the shop door; they keep a step behind me
-  const me = { x: A.SPOTS.door - 10, facing: -1, walk: 0 };
-  const guest = { x: A.SPOTS.door + 10, facing: -1, walk: 0, state: "follow" };
+  // me from the grille, the customer coming round the counter after me; they keep a step behind
+  const me = { x: keeper.x, facing: -1, walk: 0 };
+  const guest = { x: A.SPOTS.window, facing: -1, walk: 0, state: "follow" };
   let cam = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
   let handle = [56, 92];
   const near = { chair: false, crank: false, crankZone: false };
@@ -723,7 +823,7 @@ function chairScene(o) {
     const free = !cranking && st.phase !== "after" && st.phase !== "leave" && st.phase !== "done";
     const dir = free ? (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0) : 0;
     if (dir) {
-      me.x = Math.max(12, Math.min(A.RW - 12, me.x + dir * 62 * dt));
+      me.x = Math.max(12, Math.min(A.SPOTS.counter + 4, me.x + dir * 62 * dt));
       me.facing = dir;
       me.walk += dt * 11;
     } else me.walk = 0;
@@ -745,9 +845,11 @@ function chairScene(o) {
         sfx.strap();
       }
     } else if (guest.state === "leave") {
-      if (moveToward(guest, A.SPOTS.door + 24, 58, dt)) {
+      // once through to the front they are on their way out; the shop sees them to the street
+      if (moveToward(guest, A.SPOTS.door + 40, 58, dt)) {
         guest.state = "gone";
         st.phase = "done";
+        shop.leavers.push({ look, x: guest.x, facing: 1, walk: 0 });
         o.done({ amount: round1(st.taken) });
       }
     }
@@ -757,6 +859,7 @@ function chairScene(o) {
   }
 
   const sc = {
+    me,
     enter() {
       hud();
       tip("");
@@ -767,6 +870,8 @@ function chairScene(o) {
       generator.node.cut();
       voice.node.cut();
       holding = false;
+      keeper.x = me.x;
+      keeper.facing = me.facing;
     },
     update(dt, t) {
       const cranking = walking(dt);
@@ -1196,7 +1301,7 @@ function morning() {
         fn: () => {
           closePanel();
           if (S.day === 3) inspection();
-          else toCounter();
+          else toShop();
         },
       },
     ],
@@ -1284,9 +1389,7 @@ function inspectorArrives() {
   }
   say(PEOPLE.inspector.name, lines, () => {
     hud();
-    counter.cust = null;
-    hideDialog();
-    setTimeout(nextVisit, 500);
+    leaveCounter();
   });
 }
 
@@ -1535,11 +1638,11 @@ function selfRoomScene(e, back) {
     update(dt) {
       near.clock = !seated && Math.abs(me.x - CLOCK_X) < 20;
       near.chair = !seated && Math.abs(me.x - A.SPOTS.chair) < 22;
-      near.door = !seated && me.x > A.SPOTS.door - 24;
+      near.door = !seated && Math.abs(me.x - A.SPOTS.door) < 14;
       if (!seated) {
         const dir = (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0);
         if (dir) {
-          me.x = Math.max(12, Math.min(A.RW - 12, me.x + dir * 62 * dt));
+          me.x = Math.max(12, Math.min(A.SPOTS.door + 10, me.x + dir * 62 * dt));
           me.facing = dir;
           me.walk += dt * 11;
         } else me.walk = 0;
@@ -1881,5 +1984,9 @@ window.__ps = {
   night: () => go(night()),
   selfChair: (o) => go(selfChairScene({ done() {}, ...o })),
   evening: () => go(evening),
+  shop: () => toShop(),
+  get arrival() {
+    return arrival;
+  },
   ending: () => ending(),
 };
