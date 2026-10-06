@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261007a";
-import * as A from "./art.js?v=20261007a";
-import { ROOM } from "./art.js?v=20261007a";
-import { createSelf3D } from "./self3d.js?v=20261007a";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261007a";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261007a";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261007b";
+import * as A from "./art.js?v=20261007b";
+import { ROOM } from "./art.js?v=20261007b";
+import { createSelf3D } from "./self3d.js?v=20261007b";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261007b";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261007b";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -1535,6 +1535,7 @@ const evening = {
   enter() {
     hud();
     tip("");
+    hideDialog();
     // what lapses at the end of today
     const lapsing = S.jars.filter((j) => j.pawn && !j.owned && j.pawn.dueDay <= S.day);
     let guild = "";
@@ -1849,6 +1850,7 @@ function afterSelf(e, taken) {
     sfx.glass();
   }
   note(`내 ${SELF[e].name} ${amount}할을 뽑아 저장고에 두었다`);
+  hideDialog();
   go(evening);
 }
 
