@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261007b";
-import * as A from "./art.js?v=20261007b";
-import { ROOM } from "./art.js?v=20261007b";
-import { createSelf3D } from "./self3d.js?v=20261007b";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261007b";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261007b";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261007c";
+import * as A from "./art.js?v=20261007c";
+import { ROOM } from "./art.js?v=20261007c";
+import { createSelf3D } from "./self3d.js?v=20261007c";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261007c";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261007c";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -2102,6 +2102,7 @@ requestAnimationFrame(frame);
 // dev hook for automated checks
 window.__ps = {
   S,
+  screen, // the grey scene layer and the colour layer, for exporting pictures
   get scene() {
     return scene;
   },
