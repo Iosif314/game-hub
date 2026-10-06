@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006y";
-import * as A from "./art.js?v=20261006y";
-import { ROOM } from "./art.js?v=20261006y";
-import { createSelf3D } from "./self3d.js?v=20261006y";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006y";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006y";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006z";
+import * as A from "./art.js?v=20261006z";
+import { ROOM } from "./art.js?v=20261006z";
+import { createSelf3D } from "./self3d.js?v=20261006z";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006z";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006z";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -19,6 +19,7 @@ const dText = dlg.querySelector(".text");
 const dChoices = dlg.querySelector(".choices");
 const pnl = $("panel");
 const labelTip = $("label-tip");
+const fadeEl = $("fade");
 const overlay = $("overlay");
 
 // the build number is the cache-busting tag on this script's address, e.g. 20261006c → v2026.10.06c
@@ -144,6 +145,26 @@ function closePanel() {
 // ---------------------------------------------------------------------------------------------
 // scenes
 // ---------------------------------------------------------------------------------------------
+// moving between rooms: the screen goes dark, the room changes, and it comes back
+const FADE = 0.35; // seconds each way
+let fade = null; // { k: darkness 0..1, dir: 1 darkening | -1 clearing, then: the change made at full dark }
+function fadeTo(then) {
+  if (fade) return;
+  fade = { k: 0, dir: 1, then };
+}
+function stepFade(dt) {
+  fade.k += (fade.dir * dt) / FADE;
+  if (fade.dir > 0 && fade.k >= 1) {
+    fade.k = 1;
+    const then = fade.then;
+    fade.then = null;
+    fade.dir = -1;
+    then();
+  } else if (fade.dir < 0 && fade.k <= 0) fade = null;
+  const k = fade ? fade.k : 0;
+  fadeEl.style.opacity = String(k * k * (3 - 2 * k));
+}
+
 let scene = null;
 function go(s) {
   if (scene && scene.leave) scene.leave();
@@ -285,19 +306,24 @@ const front = {
     this.cam += (camFor(me.x, 0, A.FW) - this.cam) * Math.min(1, dt * 6);
     if (me.x <= A.FSPOT.exit) {
       // down the passage into the back room
-      entry = { x: A.RL + 16, facing: 1 };
-      return enterBack();
+      return fadeTo(() => {
+        entry = { x: A.RL + 16, facing: 1 };
+        enterBack();
+      });
     }
     if (me.x >= A.FSPOT.stairs) {
       // down the stairs to the storeroom; back up the same way
-      return go(
-        cellarScene({
-          title: "저장고 · 병에 마우스를 올리면 라벨이 보인다",
-          back: () => {
-            entry = { x: A.FSPOT.stairs - 14, facing: -1 };
-            go(front);
-          },
-        }),
+      return fadeTo(() =>
+        go(
+          cellarScene({
+            title: "저장고 · 병에 마우스를 올리면 라벨이 보인다",
+            back: () =>
+              fadeTo(() => {
+                entry = { x: A.FSPOT.stairs - 14, facing: -1 };
+                go(front);
+              }),
+          }),
+        ),
       );
     }
     this.near.window = Math.abs(me.x - A.FSPOT.window) < 40;
@@ -393,8 +419,10 @@ function enterBack() {
   else go(backRoom);
 }
 function toFrontFromBack() {
-  entry = { x: A.FSPOT.exit + 14, facing: 1 };
-  go(front);
+  fadeTo(() => {
+    entry = { x: A.FSPOT.exit + 14, facing: 1 };
+    go(front);
+  });
 }
 
 // a deal struck: they go round to the back door, and I go to let them in
@@ -1709,7 +1737,7 @@ function selfPawn(back) {
     disabled: S.selfTaken[k] >= e.reserve,
     fn: () => {
       closePanel();
-      go(selfRoomScene(k, () => go(evening)));
+      fadeTo(() => go(selfRoomScene(k, () => fadeTo(() => go(evening)))));
     },
   }));
   panel(
@@ -2053,8 +2081,9 @@ function frame(now) {
 
 function step(dt, t) {
   screen.clear();
+  if (fade) stepFade(dt);
   if (scene) {
-    if (scene.update) scene.update(dt, t);
+    if (scene.update && !fade) scene.update(dt, t);
     ePressed = false;
     scene.draw(t, dt);
   } else {
