@@ -211,3 +211,5 @@ button:disabled { opacity: 0.4; cursor: default; }
   pointer-events: none;
   z-index: 6;
 }
+.paper.note > div { margin-top: 4px; font-style: italic; }
+.paper.note > div:first-child { font-style: normal; border-bottom: 1px solid #3b2e22; padding-bottom: 4px; }

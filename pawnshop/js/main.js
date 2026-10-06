@@ -1,8 +1,8 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006e";
-import * as A from "./art.js?v=20261006e";
-import { ROOM } from "./art.js?v=20261006e";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006e";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js?v=20261006e";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006f";
+import * as A from "./art.js?v=20261006f";
+import { ROOM } from "./art.js?v=20261006f";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006f";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006f";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -43,6 +43,7 @@ const S = {
   violations: 0,
   extractions: 0,
   flags: {},
+  selfTaken: { fear: 0, guilt: 0, pity: 0 }, // tenths of my own emotions sold through the clockwork
   queue: [],
   log: [],
 };
@@ -195,7 +196,7 @@ const counter = {
     A.drawCounterTop(b, t, true, this.bellAt ? t - this.bellAt : -10);
     if (this.hoverRules) A.drawGlow(screen.color, A.rulesSilhouette, t);
     // after enough screams, the counter sometimes shows blood for a few frames
-    if (S.extractions >= 2) {
+    if (S.extractions >= 2 && !lacks("guilt")) {
       if (!fakeStain && Math.random() < dt / 25) fakeStain = { left: 0.12 + Math.random() * 0.1, x: 30 + Math.random() * 260, y: 116 + Math.random() * 40, seed: Math.floor(Math.random() * 1e6) };
       if (fakeStain) {
         drawSplat(screen.color, { x: fakeStain.x, y: fakeStain.y, r: 4, seed: fakeStain.seed, a: 1 });
@@ -268,6 +269,8 @@ function questionsLeft(v) {
 // the visit's menu: the questions left to ask, then the deal's own actions
 function talkMenu(v, prompt, actions) {
   const p = PEOPLE[v.who];
+  // without pity there is no reason left to turn anyone away
+  if (lacks("pity")) actions = actions.filter((a) => !a.pity);
   dlg.classList.remove("hidden");
   dName.textContent = p.name;
   talk = null;
@@ -316,7 +319,7 @@ function pawnMenu(v) {
     `${emo} ${amount}할을 맡기고 ${o.loan}실링을 빌리려 한다.`,
     [
       { label: "맡는다", disabled: S.cash < o.loan, note: S.cash < o.loan ? "돈이 모자라다" : "", fn: () => interestMenu(v, amount) },
-      { label: "돌려보낸다", fn: () => refuse(v) },
+      { label: "돌려보낸다", pity: true, fn: () => refuse(v) },
     ],
     p.name,
   );
@@ -397,7 +400,7 @@ function buyMenu(v) {
           );
         },
       },
-      { label: "돌려보낸다", fn: () => refuse(v) },
+      { label: "돌려보낸다", pity: true, fn: () => refuse(v) },
     ],
     p.name,
   );
@@ -536,7 +539,7 @@ function sellMenu(v) {
           );
         },
       },
-      { label: "거절한다", fn: () => refuse(v) },
+      { label: "거절한다", pity: true, fn: () => refuse(v) },
     ],
     p.name,
   );
@@ -627,6 +630,7 @@ function drawSplat(c, s) {
 }
 
 function drawPerm(c) {
+  if (lacks("guilt")) return; // without guilt I do not see them; the inspector still does
   for (const s of S.perm) drawSplat(c, s);
 }
 
@@ -751,7 +755,7 @@ function chairScene(o) {
         if (on && st.taken < reserve) st.taken = Math.min(reserve, st.taken + dt * 0.95 * st.speed);
         st.level = st.taken;
         const left = (reserve - st.taken) / reserve;
-        const flow = st.taken >= reserve ? 0 : left < 0.3 ? left / 0.3 : 1;
+        const flow = st.taken >= reserve ? 0 : left < 0.3 && !lacks("fear") ? left / 0.3 : 1;
         if (on && Math.random() < dt * 60 * flow) st.gas.push({ s: 0, v: 100 + Math.random() * 30, thin: flow < 0.6 });
         if (on) st.faceBlood = Math.min(1, st.faceBlood + dt * 0.35);
         // blood from the nose, the eyes and the ears, flying and staying where it lands
@@ -769,7 +773,9 @@ function chairScene(o) {
             life: 0.3 + Math.random() * 0.8,
           });
         }
-        extractVoice(t, left, st.taken >= reserve);
+        // without fear I no longer hear the scream break as it nears the bottom
+        if (lacks("fear")) extractVoice(t, 1, false);
+        else extractVoice(t, left, st.taken >= reserve);
         // letting go ends it, once something has come out
         if (!on && st.taken >= 0.3) finish();
       }
@@ -1103,7 +1109,7 @@ function morning() {
 // day 3: the guild inspector is coming; stains that did not vanish must be scrubbed off before he arrives
 function inspection() {
   const left = () => S.perm.filter((s) => s.a > 0.05).length;
-  if (!left()) return inspectorArrives();
+  if (!left() || lacks("guilt")) return inspectorArrives();
   let timer = 25;
   let scrubAt = null;
   let hoverAt = null;
@@ -1209,6 +1215,7 @@ const evening = {
         },
       });
     } else buttons.push({ label: "가게 문을 닫는다", fn: () => (closePanel(), go(night())) });
+    buttons.unshift({ label: "태엽 장치로 내 감정을 판다", fn: () => selfPawn(() => go(evening)) });
     panel(
       `<div class="ledger">
          <div class="head">장부 · ${DATES[S.day - 1]}</div>
@@ -1260,6 +1267,7 @@ function night() {
     },
     update(dt, t) {
       // blood that is not there, and a scream from the back room that nobody made
+      if (lacks("guilt")) return; // nothing haunts a keeper who has sold his guilt
       if (S.screams && Math.random() < dt * 0.8) stains.push({ x: 20 + Math.random() * 280, y: 30 + Math.random() * 140, r: 2 + Math.random() * 3, seed: Math.floor(Math.random() * 1e6), left: 0.15 + Math.random() * 0.25 });
       for (const s of stains) s.left -= dt;
       stains = stains.filter((s) => s.left > 0);
@@ -1280,7 +1288,40 @@ function night() {
   };
 }
 
+// the last night: the ticket in the drawer, then how the three days ended
 function ending() {
+  const mine = S.jars.find((j) => j.mine);
+  go({
+    draw(t) {
+      A.drawCellar(screen.base);
+      S.jars.forEach((j, i) => A.drawShelfJar(screen.base, screen.color, j, i, t, false));
+    },
+  });
+  if (!mine) return summary();
+  sfx.paper();
+  panel(
+    `<div class="night-text">
+       <div class="head">서랍 속 전당표</div>
+       <div>No. 0301 · (내 이름) · 슬픔 · 대상: 스승 · 7할</div>
+       <div>스승이 죽던 날 이 가게에 맡겼다. 그날 무슨 일이 있었는지는 이 병 안에 있다.</div>
+     </div>`,
+    [
+      {
+        label: "내 슬픔을 찾아온다",
+        fn: () => {
+          closePanel();
+          removeJar(mine);
+          S.flags.grief = true;
+          go(selfChairScene({ mode: "inject", emotion: "grief", turns: 7, done: () => say("", MASTER_MEMORY, () => (hideDialog(), summary())) }));
+        },
+      },
+      { label: "서랍을 닫는다", fn: () => (closePanel(), summary()) },
+    ],
+    "night-panel",
+  );
+}
+
+function summary() {
   const f = S.flags;
   const lines = [];
   lines.push(f.guild === "paid" ? "조합 이자를 냈다. 다음 주에도 낼 수 있을까." : "조합 이자를 내지 못했다. 다음 주에는 가게를 걷어 갈 것이다.");
@@ -1289,8 +1330,10 @@ function ending() {
   else lines.push("톰은 두려움을 찾지 못한 채 크레인에 올랐다.");
   if (f.reported) lines.push("넬리의 아버지가 조합에 고발장을 냈다.");
   if (f.fined) lines.push("감독관에게 벌금을 냈다.");
+  const sold = Object.entries(S.selfTaken).filter(([, v]) => v > 0);
+  if (sold.length) lines.push(`나는 ${sold.map(([k, v]) => `${SELF[k].name} ${v}할`).join(", ")}을 팔았다.`);
   lines.push(`사흘 동안 들은 비명 ${S.screams}번. 지워지지 않은 자국 ${S.violations}번.`);
-  lines.push("서랍 속 전당표의 기한까지 사흘이 남았다.");
+  lines.push(f.grief ? "스승이 어떻게 죽었는지 기억해 냈다." : "서랍 속 전당표의 기한까지 사흘이 남았다.");
   go({
     draw(t) {
       A.drawCellar(screen.base);
@@ -1302,6 +1345,240 @@ function ending() {
     [{ label: "처음부터", fn: () => location.reload() }],
     "night-panel",
   );
+}
+
+// ---------------------------------------------------------------------------------------------
+// my own emotions: the old master's clockwork lets me sit in the chair alone
+// ---------------------------------------------------------------------------------------------
+const lacks = (e) => S.selfTaken[e] >= SELF_EFFECT;
+
+const SELF_TUBE = (() => {
+  const pts = [[A.ROOM_SELF.tube[0][0], A.ROOM_SELF.tube[0][1]], ...A.ROOM_SELF.tube.map((s) => [s[2], s[3]])];
+  const seg = [];
+  let total = 0;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const l = Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]);
+    seg.push({ a: pts[i], b: pts[i + 1], l, start: total });
+    total += l;
+  }
+  return { seg, total };
+})();
+function selfTubeAt(s) {
+  for (const g of SELF_TUBE.seg) {
+    if (s <= g.start + g.l) {
+      const k = (s - g.start) / g.l;
+      return [g.a[0] + (g.b[0] - g.a[0]) * k, g.a[1] + (g.b[1] - g.a[1]) * k];
+    }
+  }
+  return SELF_TUBE.seg[SELF_TUBE.seg.length - 1].b;
+}
+
+function selfPawn(back) {
+  // the first time, the master's note is lying in the box
+  if (!S.flags.note) {
+    S.flags.note = true;
+    sfx.paper();
+    panel(`<div class="paper note">${MASTER_NOTE.map((l) => `<div>${esc(l)}</div>`).join("")}</div>`, [{ label: "수첩을 덮는다", fn: () => selfPawn(back) }], "paper-panel");
+    return;
+  }
+  const rows = Object.entries(SELF).map(([k, e]) => ({
+    label: `${e.name}${S.selfTaken[k] ? `  (이미 ${S.selfTaken[k]}할 맡김)` : ""}`,
+    disabled: S.selfTaken[k] >= e.reserve,
+    fn: () => windMenu(k, back, 2),
+  }));
+  panel(
+    `<div class="ledger">
+       <div class="head">태엽 장치</div>
+       <div class="row">무엇을 맡길까. 조합이 1할에 ${SELF_PRICE}실링씩 쳐 준다.</div>
+       <div class="row">내 안에 얼마나 남았는지는 아무도 모른다.</div>
+     </div>`,
+    [...rows, { label: "그만둔다", fn: back }],
+    "paper-panel",
+  );
+}
+
+function windMenu(e, back, turns) {
+  panel(
+    `<div class="ledger">
+       <div class="head">태엽 감기 · ${esc(SELF[e].name)}</div>
+       <div class="row">${turns}바퀴 감았다. ${turns}할, ${turns * SELF_PRICE}실링.</div>
+       <div class="row">레버를 당기면 다 풀릴 때까지 아무도 멈출 수 없다.</div>
+     </div>`,
+    [
+      {
+        label: "한 바퀴 더 감는다",
+        disabled: turns >= 10,
+        fn: () => {
+          sfx.crankTick();
+          windMenu(e, back, turns + 1);
+        },
+      },
+      { label: "한 바퀴 푼다", disabled: turns <= 1, fn: () => windMenu(e, back, turns - 1) },
+      {
+        label: "의자에 앉는다",
+        fn: () => {
+          closePanel();
+          go(selfChairScene({ mode: "extract", emotion: e, turns, done: (taken) => afterSelf(e, taken) }));
+        },
+      },
+      { label: "그만둔다", fn: back },
+    ],
+    "paper-panel",
+  );
+}
+
+function afterSelf(e, taken) {
+  S.selfTaken[e] = round1(S.selfTaken[e] + taken);
+  const pay = Math.round(taken * SELF_PRICE);
+  S.cash += pay;
+  sfx.coins(5);
+  note(`내 ${SELF[e].name} ${round1(taken)}할을 조합에 넘기고 ${pay}실링을 받았다`);
+  go(evening);
+}
+
+// strapped in, seen from my own eyes. mode "extract": the clockwork runs down and nobody can stop it;
+// mode "inject": my own grief coming back
+function selfChairScene(o) {
+  const injecting = o.mode === "inject";
+  const reserve = injecting ? Infinity : SELF[o.emotion].reserve - S.selfTaken[o.emotion];
+  const emo = EMOTIONS[o.emotion];
+  const st = { phase: "strap", timer: 1.2, wind: o.turns, taken: 0, level: injecting ? o.turns : 0, angle: 0, intensity: 0, blood: 0, splats: [], tears: [], gas: [], tick: 0 };
+
+  function finish() {
+    generator.node.cut();
+    voice.node.cut();
+    if (!injecting && st.taken >= reserve - 0.01) {
+      // everything gone: under my own chair too, a stain that does not go
+      S.violations++;
+      S.perm.push({ x: ROOM.chairX + 16, y: ROOM.floor + 5, r: 3, seed: Math.floor(Math.random() * 1e6), flat: true, a: 1 });
+    }
+    st.splats = [];
+    st.tears = [];
+    st.gas = [];
+    st.blood = 0;
+    st.intensity = 0;
+    st.phase = "after";
+    st.timer = 1.6;
+    tip("");
+  }
+
+  return {
+    enter() {
+      hideDialog();
+      if (!generator.node) generator.node = createGenerator();
+      if (!voice.node) voice.node = createVoice();
+      sfx.strap();
+      tip(injecting ? "" : "손목을 묶었다");
+    },
+    leave() {
+      generator.node.cut();
+      voice.node.cut();
+      holding = false;
+    },
+    update(dt, t) {
+      if (st.phase === "strap") {
+        st.timer -= dt;
+        if (st.timer <= 0) {
+          st.phase = "ready";
+          tip("Space 또는 클릭: 레버를 당긴다");
+        }
+        return;
+      }
+      if (st.phase === "ready") {
+        if (holding) {
+          st.phase = "running";
+          tip("");
+          sfx.click();
+          if (!injecting) {
+            S.screams++;
+            S.screamsToday++;
+          }
+        }
+        return;
+      }
+      if (st.phase === "after") {
+        st.timer -= dt;
+        if (st.timer <= 0) {
+          st.phase = "done";
+          sfx.strap();
+          if (injecting) o.done(st.taken);
+          else say("", ["……", "아무렇지도 않다."], () => o.done(st.taken));
+        }
+        return;
+      }
+      if (st.phase !== "running") return;
+
+      // the spring runs down at its own pace; holding or letting go changes nothing now
+      st.wind = Math.max(0, st.wind - dt * 0.9);
+      st.angle += dt * 6;
+      st.tick += dt * 6;
+      if (st.tick > Math.PI / 2) {
+        st.tick = 0;
+        sfx.crankTick();
+      }
+      generator.node.set(1);
+      st.intensity = Math.min(1, st.intensity + dt * 2);
+      if (injecting) {
+        st.level = Math.max(0, st.level - dt * 0.9);
+        if (Math.random() < dt * 40) st.gas.push({ s: SELF_TUBE.total, v: -110 });
+        if (Math.random() < dt * 30) st.tears.push({ x: 40 + Math.random() * (W - 80), y: -4, vy: 40 + Math.random() * 60, len: 4 + Math.random() * 10 });
+        const sob = Math.sin(t * Math.PI * 2 * 1.6) > -0.2 ? 1 : 0.25;
+        voice.node.set({ f0: 210 + Math.sin(t * 1.3) * 40, loud: st.intensity * sob, vowel: 0.25, rough: 0.4, wobble: 9 });
+      } else {
+        if (st.taken < reserve) st.taken = Math.min(reserve, st.taken + dt * 0.9);
+        st.level = st.taken;
+        const flow = st.taken >= reserve ? 0 : 1;
+        if (Math.random() < dt * 60 * flow) st.gas.push({ s: 0, v: 100 + Math.random() * 30 });
+        st.blood = Math.min(1, st.blood + dt * 0.3);
+        // my blood on my own hands and on everything I can see
+        if (Math.random() < dt * 14) {
+          const onHand = Math.random() < 0.4;
+          const x = onHand ? (Math.random() < 0.5 ? 70 + Math.random() * 30 : W - 100 + Math.random() * 30) : Math.random() * W;
+          const y = onHand ? 140 + Math.random() * 18 : Math.random() < 0.5 ? Math.random() * 60 : 60 + Math.random() * 100;
+          st.splats.push({ x, y, r: 1 + Math.random() * 4, seed: Math.floor(Math.random() * 1e6), born: t, drip: 0 });
+        }
+        for (const s of st.splats) s.drip = Math.min(14, Math.floor((t - s.born) * 7));
+        const empty = st.taken >= reserve;
+        const gate = empty ? (Math.sin(t * Math.PI * 2 * 6.5) > 0 ? 1 : 0.12) : 1;
+        voice.node.set({ f0: empty ? 170 + Math.random() * 50 : 230 + st.intensity * 200 + (Math.random() - 0.5) * 40, loud: st.intensity * gate, vowel: 1, rough: empty ? 1 : 0.6, wobble: 12 });
+      }
+      for (const g of st.gas) g.s += g.v * dt;
+      st.gas = st.gas.filter((g) => g.s >= 0 && g.s <= SELF_TUBE.total);
+      for (const tr of st.tears) tr.y += tr.vy * dt;
+      st.tears = st.tears.filter((tr) => tr.y < H);
+      if (st.wind <= 0) finish();
+    },
+    draw(t) {
+      const b = screen.base;
+      const c = screen.color;
+      const running = st.phase === "running";
+      A.drawSelfView(b, t, { angle: st.angle, shake: running ? st.intensity * (injecting ? 0.4 : 1) : 0, hands: running ? st.intensity : 0 });
+      A.drawRoomLight(b, t, running ? 0.7 + Math.random() * 0.5 : 1);
+      const j = A.ROOM_SELF.jar;
+      A.drawGas(c, j.x, j.y, j.w, j.h, Math.min(1, st.level / 10), o.emotion, t, 7);
+      for (const g of st.gas) {
+        const [x, y] = selfTubeAt(g.s);
+        crect(c, x - 1, y - 1, 2, 2, emo.color, 0.95);
+      }
+      for (const s of st.splats) drawSplat(c, { ...s, a: 1 });
+      if (st.blood > 0) {
+        // blood running into my eyes, from the top of the world down
+        const band = Math.floor(st.blood * 46);
+        for (let y = 0; y < band; y++) crect(c, 0, y, W, 1, [110, 6, 8], (1 - y / band) * 0.8 * st.blood);
+        for (let i = 0; i < 9; i++) crect(c, ((i * 37 + 11) % W) | 0, 0, 1, Math.floor(band * (0.8 + ((i * 7) % 5) / 5)), [140, 10, 12], 0.8);
+      }
+      if (injecting && running) {
+        // grief flooding back: the world goes blue at the edges and streams down
+        const k = st.intensity * (0.6 + Math.sin(t * 5) * 0.15);
+        for (let y = 0; y < H; y += 2) {
+          const edge = Math.abs(y - H / 2) / (H / 2);
+          crect(c, 0, y, 30 + edge * 40, 2, emo.color, k * 0.5);
+          crect(c, W - 30 - edge * 40, y, 30 + edge * 40, 2, emo.color, k * 0.5);
+        }
+        for (const tr of st.tears) crect(c, tr.x, tr.y, 1, tr.len, emo.color, 0.85);
+      }
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1394,4 +1671,7 @@ window.__ps = {
     go(counter);
   },
   night: () => go(night()),
+  selfChair: (o) => go(selfChairScene({ done() {}, ...o })),
+  evening: () => go(evening),
+  ending: () => ending(),
 };

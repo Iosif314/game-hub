@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006e";
-import { EMOTIONS } from "./data.js?v=20261006e";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006f";
+import { EMOTIONS } from "./data.js?v=20261006f";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -276,6 +276,8 @@ export function drawRoom(b, t) {
   rect(b, 186, 30, 26, 32, 70);
   rect(b, 189, 33, 20, 26, 104);
   for (let x = 193; x < 209; x += 6) rect(b, x, 33, 1, 26, 60);
+  // the old master's clockwork, between the generator and the chair
+  drawClockwork(b, 86, 108);
   // workbench
   rect(b, 228, 118, 84, 5, 92);
   rect(b, 232, 123, 4, 7, 70);
@@ -537,3 +539,92 @@ export function drawShelfJar(b, c, jar, i, t, hover) {
   drawLabelPatch(c, s.x + 3, s.y + 9, s.w - 6, 7, jar.label.hand === "old");
   if (hover) drawGlow(c, (m) => jarSilhouette(m, s.x, s.y, s.w, s.h), t);
 }
+
+// --- the old master's clockwork: wound by hand, it turns the generator on its own until it runs down ---
+function spring(b, cx, cy, r, angle, v) {
+  for (let a = 0; a < Math.PI * 6; a += 0.12) {
+    const rr = (r * a) / (Math.PI * 6);
+    rect(b, cx + Math.cos(a + angle) * rr, cy + Math.sin(a + angle) * rr, 1, 1, v);
+  }
+}
+
+export function drawClockwork(b, x, y, angle = 0, scale = 1) {
+  const w = 26 * scale;
+  const h = 22 * scale;
+  rect(b, x, y, w, h, 76);
+  rect(b, x, y, w, 2, 112);
+  rect(b, x + 2, y + h - 2, w - 4, 2, 58);
+  ellipse(b, x + w / 2, y + h / 2 + 1, 8 * scale, 8 * scale, 40);
+  spring(b, x + w / 2, y + h / 2 + 1, 7 * scale, angle, 160);
+  // the winding key on top
+  const kx = x + w / 2;
+  const ky = y - 4 * scale;
+  rect(b, kx - 1, ky, 2, 4 * scale, 120);
+  const span = Math.round(Math.abs(Math.cos(angle)) * 6 * scale) + 1;
+  rect(b, kx - span, ky - 2, span * 2, 2 * Math.max(1, scale * 0.8), 150);
+}
+
+// the back room seen from the chair, strapped in: the clockwork in front of my knees, the generator
+// beyond it, the jar on the bench, and my own forearms strapped to the armrests
+export function drawSelfView(b, t, { angle = 0, shake = 0, hands = 0 } = {}) {
+  const sx = shake ? (Math.random() - 0.5) * 6 * shake : 0;
+  const sy = shake ? (Math.random() - 0.5) * 4 * shake : 0;
+  b.save();
+  b.translate(Math.round(sx), Math.round(sy));
+  rect(b, -6, -6, W + 12, 124, 30);
+  for (let x = 4; x < W; x += 13) rect(b, x, 0, 1, 92, 25);
+  rect(b, -6, 92, W + 12, 26, 40);
+  for (let x = 0; x < W; x += 18) rect(b, x, 92, 1, 26, 32);
+  rect(b, -6, 118, W + 12, 70, 26);
+  for (let y = 124; y < H; y += 10) rect(b, -6, y, W + 12, 1, 21);
+  // the generator beyond, turning by itself
+  rect(b, 30, 98, 46, 22, 66);
+  rect(b, 30, 98, 46, 2, 96);
+  const fx = 53;
+  const fy = 84;
+  for (let a = 0; a < Math.PI * 2; a += 0.09) rect(b, fx + Math.cos(a) * 13, fy + Math.sin(a) * 13, 2, 2, 116);
+  for (let k = 0; k < 4; k++) line(b, fx, fy, fx + Math.cos(angle * 3 + (k * Math.PI) / 2) * 12, fy + Math.sin(angle * 3 + (k * Math.PI) / 2) * 12, 100);
+  // the bench and the jar, the tube from my head running up and across to it
+  rect(b, 222, 108, 92, 5, 90);
+  rect(b, 228, 113, 4, 10, 68);
+  rect(b, 306, 113, 4, 10, 68);
+  drawJar(b, ROOM_SELF.jar.x, ROOM_SELF.jar.y, ROOM_SELF.jar.w, ROOM_SELF.jar.h, { marks: true });
+  for (const [x0, y0, x1, y1] of ROOM_SELF.tube) {
+    if (x0 === x1) {
+      rect(b, x0 - 1, Math.min(y0, y1), 3, Math.abs(y1 - y0), 110);
+      rect(b, x0, Math.min(y0, y1), 1, Math.abs(y1 - y0), 150);
+    } else {
+      rect(b, Math.min(x0, x1), y0 - 1, Math.abs(x1 - x0) + 2, 3, 110);
+      rect(b, Math.min(x0, x1), y0 - 1, Math.abs(x1 - x0) + 2, 1, 150);
+    }
+  }
+  // the clockwork, close in front of me
+  drawClockwork(b, 128, 92, angle, 2);
+  // my forearms on the armrests, strapped at the wrist; the hands clench as it goes on
+  for (const side of [-1, 1]) {
+    const hx = side < 0 ? 82 : W - 82;
+    rect(b, side < 0 ? 0 : W - 118, 156, 118, 8, 72);
+    for (let i = 0; i <= 16; i++) {
+      const k = i / 16;
+      const x = side < 0 ? -10 + (hx - 6 + 10) * k : W + 10 - (W + 10 - (hx + 6)) * k;
+      const y = 186 - (186 - 150) * k;
+      rect(b, x - 9, y - 7, 18, 14, 52);
+    }
+    const clench = Math.round(hands * 2);
+    ellipse(b, hx + side * 4, 150 - clench, 8, 6 - clench, 182);
+    rect(b, hx + side * 4 - 6, 146 - clench, 12, 1, 150);
+    rect(b, hx - side * 6 - 5, 146, 10, 9, 70);
+    rect(b, hx - side * 6 - 5, 149, 10, 1, 120);
+  }
+  b.restore();
+  return { sx, sy };
+}
+
+export const ROOM_SELF = {
+  jar: { x: 252, y: 62, w: 32, h: 44 },
+  tube: [
+    [150, -4, 150, 14],
+    [150, 14, 268, 14],
+    [268, 14, 268, 58],
+  ],
+};

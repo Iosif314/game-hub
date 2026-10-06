@@ -9,6 +9,7 @@ export const EMOTIONS = {
   joy: { name: "기쁨", color: [240, 214, 92], motion: "rise" },
   guilt: { name: "죄책감", color: [128, 64, 132], motion: "coil" },
   resign: { name: "체념", color: [150, 156, 170], motion: "still" },
+  pity: { name: "연민", color: [214, 150, 170], motion: "glow" },
 };
 export const EMOTION_KEYS = Object.keys(EMOTIONS);
 
@@ -256,4 +257,31 @@ export const PAPERS = [
     news: ["육군, 두려움 일괄 매입 \"전선의 사기를 위해\"", "실 가격 또 내려"],
     notice: ["[조합 공문] 이번 주 이자 30실링을 오늘 저녁까지 낼 것."],
   },
+];
+
+// what I can pawn myself with the old master's clockwork, and how much of each I carry.
+// I am never told these numbers; winding past them takes everything and leaves a stain.
+export const SELF = {
+  fear: { name: "두려움", reserve: 6 },
+  guilt: { name: "죄책감", reserve: 5 },
+  pity: { name: "연민", reserve: 4 },
+};
+export const SELF_PRICE = 4; // what the guild pays per tenth of a keeper's own emotion
+export const SELF_EFFECT = 2; // from this many tenths gone, I start to feel the lack
+
+// a page of the master's notebook, found in the clockwork box the first time I open it
+export const MASTER_NOTE = [
+  "— 스승의 수첩에서 뜯어낸 한 장 —",
+  "혼자 할 때는 태엽 장치를 쓴다. 감은 바퀴만큼 빠지고, 다 풀릴 때까지 멈추지 않는다.",
+  "자기 몫이 얼마나 남았는지는 아무도 모른다. 적게 감아라.",
+  "(마지막 줄은 잉크가 번져 읽을 수 없다.)",
+];
+
+// what comes back with my grief
+export const MASTER_MEMORY = [
+  "스승이 의자에 묶여 있다. 태엽 장치가 끝까지 감겨 있다.",
+  "스승이 소리를 지른다. 멈춰 달라고. 멈출 수 없다는 걸 누구보다 잘 아는 사람이.",
+  "태엽 손잡이를 쥔 손이 보인다. 마지막 한 바퀴를 감은 손.",
+  "내 손이다.",
+  "스승이 더 감으라고 했던가. 그렇게 기억하고 싶은 것뿐인가.",
 ];
