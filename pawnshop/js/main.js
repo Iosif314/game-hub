@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006l";
-import * as A from "./art.js?v=20261006l";
-import { ROOM } from "./art.js?v=20261006l";
-import { createSelf3D } from "./self3d.js?v=20261006l";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006l";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006l";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006m";
+import * as A from "./art.js?v=20261006m";
+import { ROOM } from "./art.js?v=20261006m";
+import { createSelf3D } from "./self3d.js?v=20261006m";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006m";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006m";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");

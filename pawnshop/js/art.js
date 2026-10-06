@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006l";
-import { EMOTIONS } from "./data.js?v=20261006l";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006m";
+import { EMOTIONS } from "./data.js?v=20261006m";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -59,8 +59,9 @@ export function drawGlow(c, paint, t) {
 }
 
 // the solid outline of a jar: lid and body
+const lidOf = (h) => (h < 26 ? 3 : 5);
 export function jarSilhouette(m, x, y, w, h) {
-  m.fillRect(x - 1, y - 5, w + 2, 5);
+  m.fillRect(x - 1, y - lidOf(h), w + 2, lidOf(h));
   m.fillRect(x, y, w, h);
 }
 
@@ -254,12 +255,12 @@ export const ROOM = {
   floor: 130,
   chairX: 120,
   head: { x: 138, y: 74 },
-  jar: { x: 254, y: 66, w: 24, h: 30 },
+  jar: { x: 252, y: 82, w: 16, h: 20 },
   tube: [
     [141, 64],
     [141, 22],
-    [266, 22],
-    [266, 60],
+    [260, 22],
+    [260, 78],
   ],
   apron: { x: 4, y: 70, w: 22, h: 60 },
 };
@@ -280,12 +281,12 @@ export function drawRoom(b, t, clockAngle = 0) {
   // the old master's clockwork, between the generator and the chair
   drawClockwork(b, 86, 108, clockAngle);
   // workbench
-  rect(b, 228, 96, 84, 5, 92);
-  rect(b, 228, 96, 84, 1, 120);
-  rect(b, 232, 101, 4, 29, 70);
-  rect(b, 304, 101, 4, 29, 70);
-  rect(b, 236, 116, 68, 3, 60);
-  rect(b, 292, 84, 10, 12, 120);
+  rect(b, 236, 102, 52, 4, 92);
+  rect(b, 236, 102, 52, 1, 120);
+  rect(b, 239, 106, 3, 24, 70);
+  rect(b, 282, 106, 3, 24, 70);
+  rect(b, 242, 119, 40, 2, 60);
+  rect(b, 275, 96, 7, 6, 120);
   // the tube: copper from the head, glass along the ceiling
   const p = ROOM.tube;
   for (let i = 0; i < p.length - 1; i++) {
@@ -302,7 +303,7 @@ export function drawRoom(b, t, clockAngle = 0) {
   }
   for (const [x, y] of [
     [141, 22],
-    [266, 22],
+    [260, 22],
   ])
     rect(b, x - 2, y - 2, 5, 5, 96);
 }
@@ -429,13 +430,14 @@ export function drawSitter(b, look0, pose, t) {
 
 // --- jars ---
 export function drawJar(b, x, y, w, h, { marks = true, target = null } = {}) {
-  rect(b, x - 1, y - 5, w + 2, 5, 84);
-  rect(b, x - 1, y - 5, w + 2, 1, 130);
-  for (let i = 1; i < 4; i++) rect(b, x + (i * w) / 4, y - 4, 1, 3, 60);
+  const lid = lidOf(h);
+  rect(b, x - 1, y - lid, w + 2, lid, 84);
+  rect(b, x - 1, y - lid, w + 2, 1, 130);
+  for (let i = 1; i < 4; i++) rect(b, x + (i * w) / 4, y - lid + 1, 1, lid - 2, 60);
   rect(b, x, y, 1, h, 150);
   rect(b, x + w - 1, y, 1, h, 150);
   rect(b, x, y + h - 1, w, 1, 150);
-  rect(b, x + 2, y + 3, 1, h - 8, 196);
+  rect(b, x + 2, y + 3, 1, h - Math.round(h / 4), 196);
   if (marks) {
     for (let i = 1; i < 10; i++) rect(b, x + w - 4, y + h - (h * i) / 10, i % 5 === 0 ? 4 : 2, 1, 176);
   }
