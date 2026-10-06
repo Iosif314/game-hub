@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006b";
-import { EMOTIONS } from "./data.js?v=20261006b";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006c";
+import { EMOTIONS } from "./data.js?v=20261006c";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -98,7 +98,7 @@ export function drawGrille(b) {
   rect(b, 98, 56, 124, 2, 14);
 }
 
-export function drawCounterTop(b, t, lampOn = true) {
+export function drawCounterTop(b, t, lampOn = true, bellSince = -10) {
   rect(b, 0, 112, W, 68, 66);
   rect(b, 0, 112, W, 10, 112);
   rect(b, 0, 112, W, 1, 160);
@@ -125,6 +125,7 @@ export function drawCounterTop(b, t, lampOn = true) {
   line(b, 300, 118, 296, 130, 120);
   line(b, 300, 118, 306, 130, 120);
   rect(b, 294, 130, 14, 2, 160);
+  drawBell(b, bellSince);
   // oil lamp and its pool of light
   rect(b, 214, 136, 12, 6, 120);
   rect(b, 217, 120, 6, 16, 170);
@@ -138,6 +139,27 @@ export function drawCounterTop(b, t, lampOn = true) {
     b.fillRect(0, 0, W, H);
     b.globalCompositeOperation = "source-over";
     rect(b, 219, 124, 2, 4, 255);
+  }
+}
+
+// the desk bell on the counter; `since` is the time since it was last struck
+export function drawBell(b, since) {
+  const ringing = since >= 0 && since < 0.5;
+  const sx = ringing ? Math.round(Math.sin(since * 60) * (1 - since / 0.5) * 1.5) : 0;
+  const x = 182 + sx;
+  const y = 122;
+  rect(b, x - 7, y + 4, 14, 2, 70);
+  ellipse(b, x, y + 3, 6, 4, 150);
+  rect(b, x - 7, y + 4, 14, 2, 96);
+  rect(b, x - 2, y - 2, 4, 2, 120);
+  rect(b, x - 3, y + 1, 2, 1, 210);
+  if (ringing) {
+    // the ring of it, in short strokes around the dome
+    const k = Math.floor(since * 10) % 2;
+    rect(b, x - 11 - k, y - 1, 2, 1, 220);
+    rect(b, x + 10 + k, y - 1, 2, 1, 220);
+    rect(b, x - 9, y - 5 - k, 1, 2, 220);
+    rect(b, x + 9, y - 5 - k, 1, 2, 220);
   }
 }
 

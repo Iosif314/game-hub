@@ -1,8 +1,8 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006b";
-import * as A from "./art.js?v=20261006b";
-import { ROOM } from "./art.js?v=20261006b";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006b";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js?v=20261006b";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006c";
+import * as A from "./art.js?v=20261006c";
+import { ROOM } from "./art.js?v=20261006c";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006c";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS } from "./data.js?v=20261006c";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -181,9 +181,11 @@ const counter = {
   draw(t, dt) {
     const b = screen.base;
     A.drawCounter(b, t);
-    if (this.cust) A.drawBust(b, this.cust.look, { t, expr: this.expr });
+    // someone stepping up to the grille rises into view
+    const rise = this.arrivedAt ? Math.max(0, 1 - (t - this.arrivedAt) / 0.6) : 0;
+    if (this.cust) A.drawBust(b, this.cust.look, { t, expr: this.expr, y: 112 + Math.round(rise * rise * 26) });
     A.drawGrille(b);
-    A.drawCounterTop(b, t);
+    A.drawCounterTop(b, t, true, this.bellAt ? t - this.bellAt : -10);
     if (this.hoverRules) A.drawGlow(screen.color, A.rulesSilhouette, t);
     // after enough screams, the counter sometimes shows blood for a few frames
     if (S.extractions >= 2) {
@@ -214,11 +216,37 @@ function nextVisit() {
     return;
   }
   if (v.needs && !jarOf(v.needs)) return nextVisit();
-  counter.cust = PEOPLE[v.who];
-  counter.expr = v.kind === "last" ? "sad" : "neutral";
+  // the window stays empty a moment; then footsteps, someone at the grille, and the bell
+  counter.cust = null;
+  hideDialog();
+  const a = (arrival = { v, timers: [], served: false });
+  const later = (ms, fn) => a.timers.push(setTimeout(() => arrival === a && scene === counter && fn(), ms));
+  later(900 + Math.random() * 1200, () => {
+    sfx.steps();
+    counter.cust = PEOPLE[v.who];
+    counter.expr = v.kind === "last" ? "sad" : "neutral";
+    counter.arrivedAt = performance.now() / 1000;
+    later(1500, () => ringBell(a, false));
+  });
+}
+
+// whoever is waiting at the grille, until I answer the bell
+let arrival = null;
+
+function ringBell(a, again) {
   sfx.bell();
-  const run = { pawn: pawnFlow, last: pawnFlow, buy: buyFlow, redeem: redeemFlow, sell: sellFlow, blackmail: blackmailFlow }[v.kind];
-  run(v);
+  counter.bellAt = performance.now() / 1000;
+  choose(again ? "딸랑, 딸랑— 손님이 다시 벨을 울린다." : "딸랑— 손님이 창구의 벨을 울렸다.", [{ label: "응대한다", fn: () => serve(a) }], "");
+  // left waiting, they ring again
+  a.timers.push(setTimeout(() => arrival === a && scene === counter && !a.served && ringBell(a, true), 9000));
+}
+
+function serve(a) {
+  a.served = true;
+  for (const id of a.timers) clearTimeout(id);
+  arrival = null;
+  const run = { pawn: pawnFlow, last: pawnFlow, buy: buyFlow, redeem: redeemFlow, sell: sellFlow, blackmail: blackmailFlow }[a.v.kind];
+  run(a.v);
 }
 
 const jarOf = (who) => S.jars.find((j) => j.owner === who);

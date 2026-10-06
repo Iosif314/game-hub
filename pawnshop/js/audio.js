@@ -187,6 +187,9 @@ export const sfx = {
   paper() {
     burst(0.18, 4000, 0.8, 0.08);
   },
+  steps() {
+    for (let i = 0; i < 4; i++) burst(0.06, 220 + Math.random() * 60, 2.5, 0.35, i * 0.32);
+  },
   knock() {
     burst(0.07, 180, 2, 0.6);
     burst(0.07, 180, 2, 0.6, 0.22);
