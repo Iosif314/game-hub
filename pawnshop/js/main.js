@@ -1,12 +1,16 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006h";
-import * as A from "./art.js?v=20261006h";
-import { ROOM } from "./art.js?v=20261006h";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006h";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006h";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006i";
+import * as A from "./art.js?v=20261006i";
+import { ROOM } from "./art.js?v=20261006i";
+import { createSelf3D } from "./self3d.js?v=20261006i";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006i";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006i";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
 const screen = createScreen(view);
+// the view from the chair when I sit in it myself is drawn in 3D on its own canvas
+const S3 = createSelf3D($("view3d"));
+S3.show(false);
 const hudEl = $("hud");
 const tipEl = $("tip");
 const dlg = $("dialog");
@@ -1546,6 +1550,7 @@ function selfChairScene(o) {
     st.tears = [];
     st.gas = [];
     st.blood = 0;
+    S3.clear();
     st.intensity = 0;
     st.phase = "after";
     st.timer = 1.6;
@@ -1555,6 +1560,8 @@ function selfChairScene(o) {
   return {
     enter() {
       hideDialog();
+      S3.clear();
+      S3.show(true);
       if (!generator.node) generator.node = createGenerator();
       if (!voice.node) voice.node = createVoice();
       sfx.strap();
@@ -1564,6 +1571,7 @@ function selfChairScene(o) {
       generator.node.cut();
       voice.node.cut();
       holding = false;
+      S3.show(false);
     },
     update(dt, t) {
       if (st.phase === "strap") {
@@ -1638,35 +1646,22 @@ function selfChairScene(o) {
       st.tears = st.tears.filter((tr) => tr.y < H);
       if (st.wind <= 0) finish();
     },
-    draw(t) {
-      const b = screen.base;
-      const c = screen.color;
+    draw(t, dt = 1 / 60) {
+      // seen in 3D, kept flat; the 2D layers stay empty underneath
       const running = st.phase === "running";
-      A.drawSelfView(b, t, { angle: st.angle, shake: running ? st.intensity * (injecting ? 0.4 : 1) : 0, hands: running ? st.intensity : 0 });
-      A.drawRoomLight(b, t, running ? 0.7 + Math.random() * 0.5 : 1);
-      const j = A.ROOM_SELF.jar;
-      A.drawGas(c, j.x, j.y, j.w, j.h, Math.min(1, st.level / 10), o.emotion, t, 7);
-      for (const g of st.gas) {
-        const [x, y] = selfTubeAt(g.s);
-        crect(c, x - 1, y - 1, 2, 2, emo.color, 0.95);
-      }
-      for (const s of st.splats) drawSplat(c, { ...s, a: 1 });
-      if (st.blood > 0) {
-        // blood running into my eyes, from the top of the world down
-        const band = Math.floor(st.blood * 46);
-        for (let y = 0; y < band; y++) crect(c, 0, y, W, 1, [110, 6, 8], (1 - y / band) * 0.8 * st.blood);
-        for (let i = 0; i < 9; i++) crect(c, ((i * 37 + 11) % W) | 0, 0, 1, Math.floor(band * (0.8 + ((i * 7) % 5) / 5)), [140, 10, 12], 0.8);
-      }
-      if (injecting && running) {
-        // grief flooding back: the world goes blue at the edges and streams down
-        const k = st.intensity * (0.6 + Math.sin(t * 5) * 0.15);
-        for (let y = 0; y < H; y += 2) {
-          const edge = Math.abs(y - H / 2) / (H / 2);
-          crect(c, 0, y, 30 + edge * 40, 2, emo.color, k * 0.5);
-          crect(c, W - 30 - edge * 40, y, 30 + edge * 40, 2, emo.color, k * 0.5);
-        }
-        for (const tr of st.tears) crect(c, tr.x, tr.y, 1, tr.len, emo.color, 0.85);
-      }
+      S3.update(dt, t, {
+        angle: st.angle,
+        hands: running ? st.intensity : 0,
+        shake: running ? st.intensity * (injecting ? 0.4 : 1) : 0,
+        level: st.level,
+        emotionColor: emo.color,
+        gas: st.gas.map((g) => ({ u: Math.max(0, Math.min(1, g.s / SELF_TUBE.total)) })),
+        bleeding: running && !injecting,
+        blood: st.blood,
+        flood: injecting && running ? st.intensity : 0,
+        running,
+      });
+      S3.render();
     },
   };
 }
