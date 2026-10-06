@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006t";
-import { EMOTIONS } from "./data.js?v=20261006t";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006u";
+import { EMOTIONS } from "./data.js?v=20261006u";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -662,7 +662,8 @@ export function backDoorSilhouette(m) {
 
 // --- the shop front: the grille counter seen straight on, me walking the floor in front of it ---
 export const FW = 420; // wider than the screen too
-export const FSPOT = { exit: 12, window: 286, rules: 356 };
+export const FSPOT = { exit: 12, cellar: 56, window: 286, rules: 356 };
+const FCELLAR = { x: 43, w: 26 }; // the door down to the cellar
 const FWIN = { x: 244, y: 26, w: 84, h: 72 }; // the grille window in the wall above the counter
 const FRULES = { x: 346, y: 34, w: 22, h: 30 };
 
@@ -675,11 +676,19 @@ export function drawFront(b, t, { bellSince = -10, cust = null } = {}) {
   // the doorway to the back room, at the far left
   rect(b, 0, 28, 30, ROOM.floor - 28, 62);
   rect(b, 0, 32, 26, ROOM.floor - 32, 16);
+  // the low door down to the cellar, a step down behind it
+  const d = FCELLAR;
+  rect(b, d.x - 3, 44, d.w + 6, ROOM.floor - 44, 58);
+  rect(b, d.x, 48, d.w, ROOM.floor - 48, 86);
+  rect(b, d.x + 3, 52, d.w - 6, 30, 94);
+  rect(b, d.x + 3, 86, d.w - 6, 38, 94);
+  rect(b, d.x + d.w - 6, 88, 3, 3, 170);
+  rect(b, d.x + 6, 40, d.w - 12, 3, 120);
   // a shelf of empty jars
-  rect(b, 58, 64, 70, 3, 92);
-  rect(b, 62, 67, 2, 6, 60);
-  rect(b, 122, 67, 2, 6, 60);
-  for (let i = 0; i < 5; i++) drawJar(b, 62 + i * 13, 52, 9, 12, { marks: false });
+  rect(b, 82, 64, 70, 3, 92);
+  rect(b, 86, 67, 2, 6, 60);
+  rect(b, 146, 67, 2, 6, 60);
+  for (let i = 0; i < 5; i++) drawJar(b, 86 + i * 13, 52, 9, 12, { marks: false });
   // the pawnbroker's sign: three balls on a bracket
   rect(b, 150, 14, 30, 2, 70);
   for (const [x, y] of [
@@ -764,6 +773,9 @@ export function frontWindowSilhouette(m) {
   m.fillRect(w.x - 4, w.y - 4, w.w + 8, w.h + 4);
   m.fillRect(196, 98, 196, 5);
   m.fillRect(333, 90, 10, 8);
+}
+export function cellarDoorSilhouette(m) {
+  m.fillRect(FCELLAR.x - 3, 44, FCELLAR.w + 6, ROOM.floor - 44);
 }
 export function frontRulesSilhouette(m) {
   const r = FRULES;

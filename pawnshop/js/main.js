@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006t";
-import * as A from "./art.js?v=20261006t";
-import { ROOM } from "./art.js?v=20261006t";
-import { createSelf3D } from "./self3d.js?v=20261006t";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006t";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006t";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006u";
+import * as A from "./art.js?v=20261006u";
+import { ROOM } from "./art.js?v=20261006u";
+import { createSelf3D } from "./self3d.js?v=20261006u";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006u";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006u";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -252,7 +252,7 @@ const bellText = () => (arrival.rung > 1 ? "딸랑, 딸랑— 손님이 다시 �
 const front = {
   me: { x: 0, facing: 1, walk: 0 },
   cam: 0,
-  near: { window: false, rules: false },
+  near: { window: false, rules: false, cellar: false },
   leaving: null, // whoever just stepped away from the grille, sinking out of sight
   enter() {
     hud();
@@ -286,6 +286,7 @@ const front = {
     }
     this.near.window = Math.abs(me.x - A.FSPOT.window) < 40;
     this.near.rules = Math.abs(me.x - A.FSPOT.rules) < 14;
+    this.near.cellar = Math.abs(me.x - A.FSPOT.cellar) < 14;
     if (busy) return;
     if (this.near.window && ringing()) {
       tip("E  응대한다");
@@ -293,6 +294,9 @@ const front = {
     } else if (this.near.rules) {
       tip("E  조합 규정을 읽는다");
       if (ePressed) showRules();
+    } else if (this.near.cellar) {
+      tip(ringing() ? `E  저장고로 내려간다 · ${bellText()}` : "E  저장고로 내려간다");
+      if (ePressed) go(cellarScene({ title: "저장고 · 병에 마우스를 올리면 라벨이 보인다", back: () => go(front) }));
     } else if (pending) tip("← 추출실로 간다 · 손님이 뒷문에서 기다린다");
     else if (ringing()) tip(`${bellText()} · 창구로 간다`);
     else tip("← → 이동 · ← 끝은 추출실");
@@ -318,6 +322,7 @@ const front = {
     const glow = (paint) => A.drawGlow(c, (m) => (m.save(), m.translate(-cx, 0), paint(m), m.restore()), t);
     if (this.near.window && ringing()) glow(A.frontWindowSilhouette);
     if (this.near.rules) glow(A.frontRulesSilhouette);
+    if (this.near.cellar) glow(A.cellarDoorSilhouette);
   },
 };
 
@@ -1710,13 +1715,14 @@ function selfPawn(back) {
 const CLOCK_X = 99;
 
 function selfRoomScene(e, back) {
-  const me = { x: A.SPOTS.door - 10, facing: -1, walk: 0 };
-  let cam = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
+  // in from the counter room at the right edge; walking back out that way gives it up
+  const me = { x: A.RW - 16, facing: -1, walk: 0 };
+  let cam = camFor(me.x, A.RL, A.RW);
   let turns = 0;
   let seated = false;
   let windAngle = 0;
   let spin = 0;
-  const near = { clock: false, chair: false, door: false };
+  const near = { clock: false, chair: false };
 
   return {
     enter() {
@@ -1729,17 +1735,16 @@ function selfRoomScene(e, back) {
     update(dt) {
       near.clock = !seated && Math.abs(me.x - CLOCK_X) < 20;
       near.chair = !seated && Math.abs(me.x - A.SPOTS.chair) < 22;
-      near.door = !seated && Math.abs(me.x - A.SPOTS.door) < 14;
       if (!seated) {
-        const dir = (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0);
+        const dir = keyDir();
         if (dir) {
-          me.x = Math.max(12, Math.min(A.SPOTS.door + 10, me.x + dir * 62 * dt));
+          me.x = Math.max(A.RL + 12, me.x + dir * 62 * dt);
           me.facing = dir;
           me.walk += dt * 11;
         } else me.walk = 0;
       }
-      const target = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
-      cam += (target - cam) * Math.min(1, dt * 6);
+      cam += (camFor(me.x, A.RL, A.RW) - cam) * Math.min(1, dt * 6);
+      if (me.x >= A.RW - 8) return back();
       if (spin > 0) {
         spin -= dt;
         windAngle += dt * 9;
@@ -1756,10 +1761,8 @@ function selfRoomScene(e, back) {
       } else if (near.chair && turns > 0) {
         tip(`E  의자에 앉아 손목을 묶는다 · ${wound}`);
         if (ePressed) go(selfChairScene({ mode: "extract", emotion: e, turns, done: (taken) => afterSelf(e, taken) }));
-      } else if (near.door) {
-        tip(turns ? `E  그만두고 가게로 돌아간다 · ${wound}` : "E  가게로 돌아간다");
-        if (ePressed) back();
-      } else tip(turns ? `← → 이동 · 의자에 앉는다 · ${wound}` : "← → 이동 · 태엽 장치로 간다");
+      } else if (me.x > A.SPOTS.door - 20) tip(turns ? `→ 그만두고 창구 방으로 돌아간다 · ${wound}` : "← 태엽 장치로 간다 · → 창구 방으로 돌아간다");
+      else tip(turns ? `← → 이동 · 의자에 앉는다 · ${wound}` : "← → 이동 · 태엽 장치로 간다");
     },
     draw(t) {
       const b = screen.base;
