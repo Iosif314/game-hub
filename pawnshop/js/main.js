@@ -166,13 +166,16 @@ function showRules() {
 const counter = {
   cust: null,
   expr: "neutral",
+  hoverRules: false,
   move(x, y) {
-    view.style.cursor = onRules(x, y) ? "pointer" : "";
+    this.hoverRules = onRules(x, y);
+    view.style.cursor = this.hoverRules ? "pointer" : "";
   },
   down(x, y) {
     if (onRules(x, y)) showRules();
   },
   leave() {
+    this.hoverRules = false;
     view.style.cursor = "";
   },
   draw(t, dt) {
@@ -181,6 +184,7 @@ const counter = {
     if (this.cust) A.drawBust(b, this.cust.look, { t, expr: this.expr });
     A.drawGrille(b);
     A.drawCounterTop(b, t);
+    if (this.hoverRules) A.drawGlow(screen.color, A.RULES_PAPER.x, A.RULES_PAPER.y, A.RULES_PAPER.w, A.RULES_PAPER.h, t);
     // after enough screams, the counter sometimes shows blood for a few frames
     if (S.extractions >= 2) {
       if (!fakeStain && Math.random() < dt / 25) fakeStain = { left: 0.12 + Math.random() * 0.1, x: 30 + Math.random() * 260, y: 116 + Math.random() * 40, seed: Math.floor(Math.random() * 1e6) };
@@ -958,6 +962,7 @@ function cellarScene({ title, pick, back }) {
     leave() {
       closePanel();
       labelTip.classList.add("hidden");
+      view.style.cursor = "";
     },
     move(x, y, ev) {
       if (open) return;
@@ -966,6 +971,7 @@ function cellarScene({ title, pick, back }) {
         const s = A.shelfSlot(i);
         if (x >= s.x - 3 && x <= s.x + s.w + 3 && y >= s.y - 6 && y <= s.y + s.h + 2) hover = i;
       });
+      view.style.cursor = hover >= 0 ? "pointer" : "";
       if (hover >= 0) {
         labelTip.innerHTML = labelText(S.jars[hover].label);
         labelTip.className = S.jars[hover].label.hand === "old" ? "old" : "";
@@ -1065,7 +1071,9 @@ function inspection() {
   if (!left()) return inspectorArrives();
   let timer = 25;
   let scrubAt = null;
+  let hoverAt = null;
   let sound = 0;
+  const stainNear = (x, y) => S.perm.find((s) => s.a > 0.05 && Math.hypot(s.x - x, s.y - y) < 8);
   go({
     enter() {
       tip("");
@@ -1078,7 +1086,12 @@ function inspection() {
       scrubAt = [x, y];
     },
     move(x, y) {
+      hoverAt = [x, y];
       if (scrubAt) scrubAt = [x, y];
+      view.style.cursor = stainNear(x, y) ? "pointer" : "";
+    },
+    leave() {
+      view.style.cursor = "";
     },
     up() {
       scrubAt = null;
@@ -1106,6 +1119,11 @@ function inspection() {
       A.drawChair(screen.base);
       A.drawRoomLight(screen.base, t);
       drawPerm(screen.color);
+      const near = hoverAt && stainNear(hoverAt[0], hoverAt[1]);
+      if (near) {
+        const r = Math.ceil(near.r * (near.flat ? 1.8 : 1)) + 2;
+        A.drawGlow(screen.color, near.x - r, near.y - r, r * 2 + 1, r * 2 + 1 + (near.drip || 0), t);
+      }
       if (scrubAt) rect(screen.base, scrubAt[0] - 3, scrubAt[1] - 2, 6, 4, 200);
     },
   });

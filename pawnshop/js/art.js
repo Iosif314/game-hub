@@ -24,6 +24,25 @@ export function drawCounter(b, t) {
   drawRulesPaper(b);
 }
 
+// a soft warm outline around something the mouse can use; drawn on the colour layer so it is not dithered
+export function drawGlow(c, x, y, w, h, t) {
+  const p = 0.55 + Math.sin(t * 5) * 0.25;
+  const warm = [255, 226, 160];
+  x = Math.round(x);
+  y = Math.round(y);
+  w = Math.round(w);
+  h = Math.round(h);
+  for (const [d, a] of [
+    [1, p],
+    [2, p * 0.35],
+  ]) {
+    crect(c, x - d, y - d, w + d * 2, 1, warm, a);
+    crect(c, x - d, y + h + d - 1, w + d * 2, 1, warm, a);
+    crect(c, x - d, y - d + 1, 1, h + d * 2 - 2, warm, a);
+    crect(c, x + w + d - 1, y - d + 1, 1, h + d * 2 - 2, warm, a);
+  }
+}
+
 // the guild's rules, pinned to the wall beside the grille
 export const RULES_PAPER = { x: 240, y: 18, w: 42, h: 58 };
 
@@ -466,8 +485,5 @@ export function drawShelfJar(b, c, jar, i, t, hover) {
   drawGas(c, s.x, s.y, s.w, s.h, Math.min(1, jar.amount / 10), jar.emotion, t, i + 3);
   // the label sits in front of the gas, so it goes on the colour layer in the paper's sepia
   drawLabelPatch(c, s.x + 3, s.y + 9, s.w - 6, 7, jar.label.hand === "old");
-  if (hover) {
-    rect(b, s.x - 3, s.y - 8, 1, s.h + 10, 230);
-    rect(b, s.x + s.w + 2, s.y - 8, 1, s.h + 10, 230);
-  }
+  if (hover) drawGlow(c, s.x - 2, s.y - 6, s.w + 4, s.h + 7, t);
 }
