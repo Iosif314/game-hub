@@ -1,8 +1,8 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006f";
-import * as A from "./art.js?v=20261006f";
-import { ROOM } from "./art.js?v=20261006f";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006f";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006f";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006g";
+import * as A from "./art.js?v=20261006g";
+import { ROOM } from "./art.js?v=20261006g";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006g";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006g";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -641,8 +641,8 @@ function chairScene(o) {
   const injecting = o.mode === "inject";
   const reserve = injecting ? Infinity : remaining(o.who, o.emotion);
   const st = {
-    phase: "strap",
-    timer: 0.9,
+    phase: "walk", // walk → seating → strap → ready → running → after → leave → done
+    timer: 0,
     level: injecting ? o.amount : 0,
     taken: 0,
     held: 0,
@@ -659,6 +659,12 @@ function chairScene(o) {
     burst: 0,
   };
   const emo = EMOTIONS[o.emotion];
+  // me and the customer, walking in from the shop door; they keep a step behind me
+  const me = { x: A.SPOTS.door - 10, facing: -1, walk: 0 };
+  const guest = { x: A.SPOTS.door + 10, facing: -1, walk: 0, state: "follow" };
+  let cam = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
+  let handle = [56, 92];
+  const near = { chair: false, crank: false, crankZone: false };
 
   function finish() {
     // one frame: every drop of blood is gone, the room is clean and silent
@@ -682,10 +688,65 @@ function chairScene(o) {
     st.intensity = 0;
     st.phase = "after";
     st.timer = 1.4;
+    tip("");
     if (!injecting) {
       S.reserve[o.who][o.emotion] = round1(reserve - st.taken);
       S.extractions++;
     }
+  }
+
+  function moveToward(p, x, speed, dt) {
+    const d = x - p.x;
+    if (Math.abs(d) < 1) {
+      p.walk = 0;
+      return true;
+    }
+    const step = Math.sign(d) * Math.min(Math.abs(d), speed * dt);
+    p.x += step;
+    p.facing = Math.sign(d);
+    p.walk += dt * 11;
+    return false;
+  }
+
+  function walking(dt) {
+    near.crank = Math.abs(me.x - A.SPOTS.crank) < 14;
+    near.crankZone = Math.abs(me.x - A.SPOTS.crank) < 28;
+    near.chair = Math.abs(me.x - A.SPOTS.chair) < 26 && Math.abs(guest.x - me.x) < 44;
+    const cranking = (st.phase === "ready" || st.phase === "running") && near.crank && (holding || keysDown.has("KeyE"));
+    const free = !cranking && st.phase !== "after" && st.phase !== "leave" && st.phase !== "done";
+    const dir = free ? (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0) : 0;
+    if (dir) {
+      me.x = Math.max(12, Math.min(A.RW - 12, me.x + dir * 62 * dt));
+      me.facing = dir;
+      me.walk += dt * 11;
+    } else me.walk = 0;
+    if (cranking) me.x = A.SPOTS.crank;
+    if (near.crank && !dir && (st.phase === "ready" || st.phase === "running")) me.facing = 1;
+    // the customer
+    if (guest.state === "follow") {
+      const behind = me.x - me.facing * 22;
+      if (Math.abs(guest.x - behind) > 3) moveToward(guest, behind, 66, dt);
+      else {
+        guest.walk = 0;
+        guest.facing = Math.sign(me.x - guest.x) || guest.facing;
+      }
+    } else if (guest.state === "toChair") {
+      if (moveToward(guest, A.SPOTS.seat, 50, dt)) {
+        guest.state = "seated";
+        st.phase = "strap";
+        st.timer = 0.9;
+        sfx.strap();
+      }
+    } else if (guest.state === "leave") {
+      if (moveToward(guest, A.SPOTS.door + 24, 58, dt)) {
+        guest.state = "gone";
+        st.phase = "done";
+        o.done({ amount: round1(st.taken) });
+      }
+    }
+    const target = Math.max(0, Math.min(A.RW - W, me.x - W / 2));
+    cam += (target - cam) * Math.min(1, dt * 6);
+    return cranking;
   }
 
   const sc = {
@@ -694,7 +755,6 @@ function chairScene(o) {
       tip("");
       if (!generator.node) generator.node = createGenerator();
       if (!voice.node) voice.node = createVoice();
-      sfx.strap();
     },
     leave() {
       generator.node.cut();
@@ -702,27 +762,42 @@ function chairScene(o) {
       holding = false;
     },
     update(dt, t) {
+      const cranking = walking(dt);
+      if (st.phase === "walk") {
+        if (near.chair) {
+          tip("E  손님을 의자에 앉힌다");
+          if (ePressed) {
+            guest.state = "toChair";
+            st.phase = "seating";
+            tip("");
+          }
+        } else tip("← → 이동 · 손님을 추출 의자로 데려간다");
+        return;
+      }
+      if (st.phase === "seating") return;
       if (st.phase === "strap") {
         st.timer -= dt;
-        if (st.timer <= 0) {
-          st.phase = "ready";
-          tip(injecting ? "Space 또는 마우스를 누르고 있으면 발전기가 거꾸로 돈다" : "Space 또는 마우스를 누르고 있으면 발전기가 돈다 · 손을 떼면 멈춘다");
-        }
+        if (st.timer <= 0) st.phase = "ready";
         return;
+      }
+      if (st.phase === "ready") {
+        if (near.crank) tip(injecting ? "E 또는 Space를 누르고 있으면 발전기가 거꾸로 돈다" : "E 또는 Space를 누르고 있으면 발전기가 돈다 · 손을 떼면 멈춘다");
+        else tip("← 발전기로 간다");
       }
       if (st.phase === "after") {
         st.timer -= dt;
         if (st.timer <= 0) {
-          st.phase = "done";
+          // they get up, thank me, and see themselves out
+          st.phase = "leave";
+          guest.state = "leave";
           sfx.strap();
           tip("");
-          o.done({ amount: round1(st.taken) });
         }
         return;
       }
-      if (st.phase === "done") return;
+      if (st.phase === "leave" || st.phase === "done") return;
 
-      const on = holding;
+      const on = cranking;
       st.speed += ((on ? 1 : 0) - st.speed) * Math.min(1, dt * (on ? 4 : 10));
       st.angle += st.speed * dt * 9;
       st.tick += st.speed * dt * 9;
@@ -794,16 +869,22 @@ function chairScene(o) {
           d.dead = true;
         }
       }
-      st.drops = st.drops.filter((d) => !d.dead && d.x > -5 && d.x < W + 5);
+      st.drops = st.drops.filter((d) => !d.dead && d.x > -5 && d.x < A.RW + 5);
       if (st.splats.length > 700) st.splats.splice(0, st.splats.length - 700);
     },
     draw(t) {
       const b = screen.base;
       const c = screen.color;
+      const cx = Math.round(cam);
+      b.save();
+      c.save();
+      b.translate(-cx, 0);
+      c.translate(-cx, 0);
       A.drawRoom(b, t);
-      A.drawGenerator(b, st.angle);
+      handle = A.drawGenerator(b, st.angle);
       A.drawChair(b);
       const running = st.phase === "running";
+      const seated = guest.state === "seated";
       const pose = { shake: 0, scream: 0, back: 0, face: "calm" };
       if (running && !injecting) {
         pose.shake = st.intensity * (st.taken >= reserve ? 0.5 : 1);
@@ -823,7 +904,10 @@ function chairScene(o) {
         }
         if (f === "cower") pose.dy = 2 * st.intensity;
       } else if (st.phase === "after" || st.phase === "done") pose.face = st.timer < 0.9 ? "smile" : "calm";
-      const head = A.drawSitter(b, look, pose, t);
+      const head = seated ? A.drawSitter(b, look, pose, t) : { hx: 0, hy: 0 };
+      if (!seated && guest.state !== "gone") A.drawWalker(b, look, guest.x, guest.facing, guest.walk, { expr: st.phase === "leave" ? "smile" : "neutral" });
+      const crankingNow = near.crank && (st.phase === "ready" || st.phase === "running");
+      A.drawWalker(b, A.KEEPER, me.x, me.facing, me.walk, { armTo: crankingNow ? handle : null });
       const j = ROOM.jar;
       A.drawJar(b, j.x, j.y, j.w, j.h, { target: injecting ? null : o.target });
       A.drawRoomLight(b, t, running ? 0.8 + Math.random() * 0.4 * st.speed : 1);
@@ -835,7 +919,7 @@ function chairScene(o) {
       drawPerm(c);
       for (const s of st.splats) drawSplat(c, s);
       for (const d of st.drops) crect(c, d.x, d.y, 1, 2, [170, 18, 18]);
-      if (!injecting && st.faceBlood > 0) {
+      if (seated && !injecting && st.faceBlood > 0) {
         // streams running down from the nose and the eye
         const len = Math.floor(st.faceBlood * 22);
         crect(c, head.hx - 10, head.hy + 3, 1, len, [140, 12, 14]);
@@ -843,6 +927,12 @@ function chairScene(o) {
         crect(c, head.hx + 2, head.hy + 1, 1, Math.floor(len * 0.4), [130, 10, 12]);
       }
       if (running && injecting) drawSwell(c, head, t);
+      b.restore();
+      c.restore();
+      // whatever I can use from where I stand glows along its outline
+      const glow = (paint) => A.drawGlow(c, (m) => (m.save(), m.translate(-cx, 0), paint(m), m.restore()), t);
+      if (st.phase === "walk" && near.chair) glow(A.chairSilhouette);
+      if (st.phase === "ready" && near.crankZone) glow(A.generatorSilhouette);
     },
   };
 
@@ -1585,6 +1675,8 @@ function selfChairScene(o) {
 // input and the loop
 // ---------------------------------------------------------------------------------------------
 let holding = false;
+const keysDown = new Set();
+let ePressed = false; // E went down since the last frame
 
 function toCanvas(ev) {
   const r = view.getBoundingClientRect();
@@ -1605,6 +1697,8 @@ view.addEventListener("mousemove", (ev) => {
 });
 window.addEventListener("keydown", (ev) => {
   if (ev.target.tagName === "INPUT" || ev.target.tagName === "SELECT") return;
+  keysDown.add(ev.code);
+  if (ev.code === "KeyE" && !ev.repeat) ePressed = true;
   if (ev.code === "Space") {
     ev.preventDefault();
     if (talk) {
@@ -1616,6 +1710,7 @@ window.addEventListener("keydown", (ev) => {
   if (ev.code === "Enter" && talk) advance();
 });
 window.addEventListener("keyup", (ev) => {
+  keysDown.delete(ev.code);
   if (ev.code === "Space") holding = false;
 });
 
@@ -1638,6 +1733,7 @@ function step(dt, t) {
   screen.clear();
   if (scene) {
     if (scene.update) scene.update(dt, t);
+    ePressed = false;
     scene.draw(t, dt);
   } else {
     A.drawCounter(screen.base, t);

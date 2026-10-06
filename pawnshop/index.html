@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>감정 전당포 · 시험판</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.39.3/dist/galmuri.css" />
-  <link rel="stylesheet" href="css/style.css?v=20261006f" />
+  <link rel="stylesheet" href="css/style.css?v=20261006g" />
 </head>
 <body>
   <div id="stage">
@@ -26,7 +26,9 @@
       <div class="warn">피와 비명이 나오는 잔혹한 장면이 있습니다. 소리를 켜고 하세요.</div>
       <table class="keys">
         <tr><td>대화 넘기기</td><td>클릭 · Space</td></tr>
-        <tr><td>발전기 돌리기</td><td>Space 또는 마우스를 누르고 있기</td></tr>
+        <tr><td>이동 (추출실)</td><td>← → 또는 A D</td></tr>
+        <tr><td>상호작용</td><td>E</td></tr>
+        <tr><td>발전기 돌리기</td><td>발전기 앞에서 E 또는 Space를 누르고 있기</td></tr>
         <tr><td>라벨 보기</td><td>저장고에서 병에 마우스 올리기</td></tr>
       </table>
       <div class="hint">클릭해서 시작</div>
@@ -37,7 +39,7 @@
     // fetch it again. Ask the server directly which build is current, and if it is newer than this
     // one, load that build instead (once per build, so it can never loop).
     (function () {
-      var build = "20261006f";
+      var build = "20261006g";
       fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })
         .then(function (r) { return r.text(); })
         .then(function (html) {
@@ -52,6 +54,6 @@
         .catch(function () {});
     })();
   </script>
-  <script type="module" src="js/main.js?v=20261006f"></script>
+  <script type="module" src="js/main.js?v=20261006g"></script>
 </body>
 </html>

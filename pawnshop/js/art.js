@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006f";
-import { EMOTIONS } from "./data.js?v=20261006f";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006g";
+import { EMOTIONS } from "./data.js?v=20261006g";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {
@@ -265,17 +265,18 @@ export const ROOM = {
 };
 
 export function drawRoom(b, t) {
-  rect(b, 0, 0, W, ROOM.floor, 30);
-  for (let x = 6; x < W; x += 11) rect(b, x, 0, 1, 100, 25);
-  rect(b, 0, 100, W, 30, 40);
-  for (let x = 0; x < W; x += 16) rect(b, x, 100, 1, 30, 32);
-  rect(b, 0, 100, W, 2, 72);
-  rect(b, 0, ROOM.floor, W, H - ROOM.floor, 28);
-  for (let y = ROOM.floor + 6; y < H; y += 9) rect(b, 0, y, W, 1, 22);
+  rect(b, 0, 0, RW, ROOM.floor, 30);
+  for (let x = 6; x < RW; x += 11) rect(b, x, 0, 1, 100, 25);
+  rect(b, 0, 100, RW, 30, 40);
+  for (let x = 0; x < RW; x += 16) rect(b, x, 100, 1, 30, 32);
+  rect(b, 0, 100, RW, 2, 72);
+  rect(b, 0, ROOM.floor, RW, H - ROOM.floor, 28);
+  for (let y = ROOM.floor + 6; y < H; y += 9) rect(b, 0, y, RW, 1, 22);
   // a high window, barred
   rect(b, 186, 30, 26, 32, 70);
   rect(b, 189, 33, 20, 26, 104);
   for (let x = 193; x < 209; x += 6) rect(b, x, 33, 1, 26, 60);
+  drawDoor(b, t);
   // the old master's clockwork, between the generator and the chair
   drawClockwork(b, 86, 108);
   // workbench
@@ -316,7 +317,7 @@ export function drawRoomLight(b, t, power = 1) {
   g.addColorStop(1, "rgba(255,255,255,0)");
   b.globalCompositeOperation = "lighter";
   b.fillStyle = g;
-  b.fillRect(0, 0, W, H);
+  b.fillRect(0, 0, RW, H);
   b.globalCompositeOperation = "source-over";
 }
 
@@ -335,22 +336,11 @@ export function drawGenerator(b, angle) {
     line(b, cx, cy, cx + Math.cos(a) * 13, cy + Math.sin(a) * 13, 104);
   }
   rect(b, cx - 2, cy - 2, 4, 4, 140);
-  // crank handle and my arm
+  // the crank handle
   const hx = cx + Math.cos(angle) * 13;
   const hy = cy + Math.sin(angle) * 13;
   rect(b, hx - 1, hy - 3, 3, 6, 170);
-  const ax = ROOM.apron.x + 18;
-  const ay = 84;
-  for (let i = 0; i <= 10; i++) {
-    const x = ax + ((hx - ax) * i) / 10;
-    const y = ay + ((hy - ay) * i) / 10;
-    rect(b, x - 2, y - 2, 4, 4, 64);
-  }
-  rect(b, hx - 2, hy - 2, 5, 4, 150);
-  // me: a dark sleeve and the apron, cut off by the edge of the picture
-  rect(b, 0, 60, 26, 70, 52);
-  rect(b, ROOM.apron.x, ROOM.apron.y, ROOM.apron.w, ROOM.apron.h, 168);
-  rect(b, ROOM.apron.x, ROOM.apron.y, ROOM.apron.w, 2, 140);
+  return [hx, hy];
 }
 
 // the chair, seen from the side; the sitter faces left, toward the generator
@@ -628,3 +618,127 @@ export const ROOM_SELF = {
     [268, 14, 268, 58],
   ],
 };
+
+// --- walking about the back room (side view) ---
+export const RW = 400; // the back room is wider than the screen; the camera follows me
+export const DOOR = { x: 352, w: 30 }; // the way in from the shop
+export const SPOTS = { crank: 22, chair: 146, seat: ROOM.chairX + 22, door: DOOR.x + DOOR.w / 2 };
+
+export function drawDoor(b, t) {
+  const { x, w } = DOOR;
+  rect(b, x - 3, 44, w + 6, ROOM.floor - 44, 64);
+  rect(b, x, 48, w, ROOM.floor - 48, 14);
+  // the shop beyond, lamplit
+  const g = b.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, "rgba(255,255,255,0)");
+  g.addColorStop(1, "rgba(255,255,255,0.18)");
+  b.fillStyle = g;
+  b.fillRect(x, 48, w, ROOM.floor - 48);
+  // the door itself, swung open against the wall
+  rect(b, x + w + 3, 46, 6, ROOM.floor - 46, 50);
+  rect(b, x + w + 4, 90, 2, 3, 120);
+}
+
+const KEEPER = { skin: 184, hair: 30, coat: 40, apron: true };
+export { KEEPER };
+
+// a person on foot, seen from the side. facing: 1 = right, -1 = left. walk: phase of the stride (0 = still).
+// armTo: [x, y] a point the near hand reaches for (the crank handle). The figure gets a dark outline
+// and clothes a shade lighter than at the grille, so it reads against the dark back room.
+export function drawWalker(b, look0, x, facing, walk = 0, { armTo = null, expr = "neutral" } = {}) {
+  const look = { ...look0, coat: Math.max(86, Math.min(170, look0.coat + 46)) };
+  for (const [ox, oy] of [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ])
+    walker(b, look, x + ox, facing, walk, armTo, expr, oy, 12);
+  walker(b, look, x, facing, walk, armTo, expr, 0, null);
+}
+
+function walker(b, look, x, facing, walk, armTo, expr, oy, flat) {
+  const T = (v) => (flat === null ? v : flat);
+  const s = look.child ? 0.8 : look.big ? 1.08 : 1;
+  const f = ROOM.floor + oy;
+  const stride = walk ? Math.sin(walk) : 0;
+  const bob = walk ? Math.abs(Math.cos(walk)) * 1 : 0;
+  const hip = f - 26 * s - bob;
+  for (const k of [-1, 1]) {
+    const off = stride * 3 * k;
+    rect(b, x - 2 + off, hip, 4, f - hip - 1, T(look.coat - 24));
+    rect(b, x - 2 + off + (facing > 0 ? 0 : -2), f - 2, 6, 2, T(22));
+  }
+  const top = hip - 26 * s;
+  rect(b, x - 6 * s, top, 12 * s, hip - top + 2, T(look.coat));
+  if (look.apron) rect(b, x + (facing > 0 ? 1 : -6), top + 6, 5, hip - top - 2, T(196));
+  if (look.hat === "shawl" || look.hat === "bonnet") rect(b, x - 7 * s, top - 1, 14 * s, 9, T(look.coat + 18));
+  const sx = x + facing * 2;
+  const sy = top + 4;
+  if (armTo) {
+    const ay = armTo[1] + oy;
+    for (let i = 0; i <= 8; i++) {
+      const px = sx + ((armTo[0] - sx) * i) / 8;
+      const py = sy + ((ay - sy) * i) / 8;
+      rect(b, px - 1.5, py - 1.5, 3, 3, T(look.coat - 16));
+    }
+    rect(b, armTo[0] - 2, ay - 2, 4, 4, T(look.skin));
+  } else {
+    const ax = sx - facing * stride * 3;
+    rect(b, ax - 1.5, sy, 3, 15 * s, T(look.coat - 16));
+    rect(b, ax - 1.5, sy + 15 * s, 3, 3, T(look.skin));
+  }
+  const hy = top - 7 * s;
+  ellipse(b, x, hy, 5 * s, 6 * s, T(look.skin));
+  if (flat === null) {
+    rect(b, x + facing * 5 * s, hy, 1, 2, look.skin - 20);
+    rect(b, x + facing * 3 * s, hy - 2, 1, 1, 16);
+    if (expr === "smile") rect(b, x + facing * 3 * s - (facing > 0 ? 0 : 1), hy + 3, 2, 1, 60);
+    else rect(b, x + facing * 3 * s, hy + 3, 1, 1, 70);
+  }
+  const hair = look.hair !== undefined ? look.hair : 40;
+  if (look.hat === "top") {
+    rect(b, x - 5 * s, hy - 16 * s, 10 * s, 11 * s, T(22));
+    rect(b, x - 7 * s, hy - 6 * s, 14 * s, 1, T(22));
+  } else if (look.hat === "bowler") {
+    ellipse(b, x, hy - 6 * s, 5 * s, 4 * s, T(26));
+    rect(b, x - 7 * s, hy - 4 * s, 14 * s, 1, T(26));
+  } else if (look.hat === "cap") {
+    rect(b, x - 5 * s, hy - 7 * s, 10 * s, 3, T(40));
+    rect(b, x + facing * 3 * s, hy - 5 * s, facing * 5, 1, T(34));
+  } else if (look.hat === "shako") {
+    rect(b, x - 5 * s, hy - 15 * s, 10 * s, 10 * s, T(30));
+    rect(b, x - 1, hy - 18 * s, 2, 3, T(180));
+  } else if (look.hat === "feather") {
+    ellipse(b, x, hy - 6 * s, 6 * s, 2, T(40));
+    line(b, x - facing * 2, hy - 7 * s, x - facing * 8, hy - 14 * s, T(200));
+  } else if (look.hat === "bonnet" || look.hat === "shawl") {
+    ellipse(b, x - facing, hy - 2, 7 * s, 8 * s, T(look.hat === "bonnet" ? 22 : look.coat + 18));
+    ellipse(b, x + facing, hy + 1, 4 * s, 5 * s, T(look.skin));
+    if (flat === null) rect(b, x + facing * 2 * s, hy, 1, 1, 16);
+  } else {
+    ellipse(b, x - facing, hy - 3 * s, 5 * s, 4 * s, T(hair));
+  }
+  if (look.beard) rect(b, x + facing * s - 2, hy + 3, 5, 3, T(hair));
+}
+
+// silhouettes for the "you can use this" glow
+export function chairSilhouette(m) {
+  const x = ROOM.chairX;
+  const f = ROOM.floor;
+  m.fillRect(x + 4, f - 22, 34, 4);
+  m.fillRect(x + 6, f - 18, 3, 18);
+  m.fillRect(x + 33, f - 18, 3, 18);
+  m.fillRect(x + 32, 40, 5, f - 62);
+  m.fillRect(x + 31, 38, 7, 3);
+  m.fillRect(x + 6, 90, 28, 3);
+  m.fillRect(x + 7, 93, 3, 15);
+  m.fillRect(x + 26, 48, 6, 20);
+}
+
+export function generatorSilhouette(m) {
+  m.fillRect(34, 104, 44, 26);
+  m.beginPath();
+  m.arc(56, 92, 15, 0, Math.PI * 2);
+  m.fill();
+}
