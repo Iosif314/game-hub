@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006m";
-import * as A from "./art.js?v=20261006m";
-import { ROOM } from "./art.js?v=20261006m";
-import { createSelf3D } from "./self3d.js?v=20261006m";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006m";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006m";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006n";
+import * as A from "./art.js?v=20261006n";
+import { ROOM } from "./art.js?v=20261006n";
+import { createSelf3D } from "./self3d.js?v=20261006n";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006n";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006n";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -640,6 +640,9 @@ function drawPerm(c) {
 
 // mode "extract": hold to crank, the emotion leaves through the tube and the blood stays where it lands
 // until the cranking stops. mode "inject": hold to push a jar back in; no blood, the emotion swells.
+// how many 할 a second the chair moves, either way; slow enough that it is felt
+const EXTRACT_RATE = 0.47;
+
 function chairScene(o) {
   const look = PEOPLE[o.who].look;
   const injecting = o.mode === "inject";
@@ -823,7 +826,7 @@ function chairScene(o) {
       st.intensity += ((on ? 1 : 0) - st.intensity) * Math.min(1, dt * (on ? 2.5 : 6));
 
       if (injecting) {
-        if (on) st.level = Math.max(0, st.level - dt * 1.1);
+        if (on) st.level = Math.max(0, st.level - dt * EXTRACT_RATE * 1.15);
         if (on && Math.random() < dt * 40) st.gas.push({ s: TUBE.total, v: -110 });
         injectVoice(t);
         if (o.emotion === "grief" && on) {
@@ -831,12 +834,12 @@ function chairScene(o) {
         }
         if (st.level <= 0) finish();
       } else {
-        if (on && st.taken < reserve) st.taken = Math.min(reserve, st.taken + dt * 0.95 * st.speed);
+        if (on && st.taken < reserve) st.taken = Math.min(reserve, st.taken + dt * EXTRACT_RATE * st.speed);
         st.level = st.taken;
         const left = (reserve - st.taken) / reserve;
         const flow = st.taken >= reserve ? 0 : left < 0.3 && !lacks("fear") ? left / 0.3 : 1;
         if (on && Math.random() < dt * 60 * flow) st.gas.push({ s: 0, v: 100 + Math.random() * 30, thin: flow < 0.6 });
-        if (on) st.faceBlood = Math.min(1, st.faceBlood + dt * 0.35);
+        if (on) st.faceBlood = Math.min(1, st.faceBlood + dt * 0.18);
         // blood from the nose, the eyes and the ears, flying and staying where it lands
         if (on && Math.random() < dt * 16 * st.intensity) {
           const src = [
@@ -1715,7 +1718,7 @@ function selfChairScene(o) {
       if (st.phase !== "running") return;
 
       // the spring runs down at its own pace; holding or letting go changes nothing now
-      st.wind = Math.max(0, st.wind - dt * 0.9);
+      st.wind = Math.max(0, st.wind - dt * EXTRACT_RATE);
       st.angle += dt * 6;
       st.tick += dt * 6;
       if (st.tick > Math.PI / 2) {
@@ -1725,7 +1728,7 @@ function selfChairScene(o) {
       generator.node.set(1);
       st.intensity = Math.min(1, st.intensity + dt * 2);
       if (injecting) {
-        st.level = Math.max(0, st.level - dt * 0.9);
+        st.level = Math.max(0, st.level - dt * EXTRACT_RATE);
         if (Math.random() < dt * 40) st.gas.push({ s: SELF_TUBE.total, v: -110 });
         // fear comes back as shaking and a thin high whine; the rest come back as weeping
         if (o.emotion === "fear") {
@@ -1736,11 +1739,11 @@ function selfChairScene(o) {
           voice.node.set({ f0: 210 + Math.sin(t * 1.3) * 40, loud: st.intensity * sob, vowel: 0.25, rough: 0.4, wobble: 9 });
         }
       } else {
-        if (st.taken < reserve) st.taken = Math.min(reserve, st.taken + dt * 0.9);
+        if (st.taken < reserve) st.taken = Math.min(reserve, st.taken + dt * EXTRACT_RATE);
         st.level = st.taken;
         const flow = st.taken >= reserve ? 0 : 1;
         if (Math.random() < dt * 60 * flow) st.gas.push({ s: 0, v: 100 + Math.random() * 30 });
-        st.blood = Math.min(1, st.blood + dt * 0.3);
+        st.blood = Math.min(1, st.blood + dt * 0.15);
         // my blood on my own hands and on everything I can see
         if (Math.random() < dt * 14) {
           const onHand = Math.random() < 0.4;
