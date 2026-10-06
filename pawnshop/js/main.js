@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006j";
-import * as A from "./art.js?v=20261006j";
-import { ROOM } from "./art.js?v=20261006j";
-import { createSelf3D } from "./self3d.js?v=20261006j";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006j";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006j";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006k";
+import * as A from "./art.js?v=20261006k";
+import { ROOM } from "./art.js?v=20261006k";
+import { createSelf3D } from "./self3d.js?v=20261006k";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006k";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006k";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -1534,14 +1534,6 @@ function selfRoomScene(e, back) {
         windAngle += dt * 9;
       }
       const wound = turns ? `${turns}바퀴 (${SELF[e].name} ${turns}할 · ${turns * SELF_PRICE}실링)` : "";
-      if (seated) {
-        tip(`E·Space  태엽을 푼다 · 멈출 수 없다 · ${wound}`);
-        if (ePressed || keysDown.has("Space") || holding) {
-          holding = false;
-          go(selfChairScene({ mode: "extract", emotion: e, turns, autostart: true, done: (taken) => afterSelf(e, taken) }));
-        }
-        return;
-      }
       if (near.clock) {
         tip(turns >= 10 ? `더는 감기지 않는다 · ${wound}` : `E  태엽을 한 바퀴 감는다${wound ? " · " + wound : ""}`);
         if (ePressed && turns < 10) {
@@ -1552,10 +1544,7 @@ function selfRoomScene(e, back) {
         }
       } else if (near.chair && turns > 0) {
         tip(`E  의자에 앉아 손목을 묶는다 · ${wound}`);
-        if (ePressed) {
-          seated = true;
-          sfx.strap();
-        }
+        if (ePressed) go(selfChairScene({ mode: "extract", emotion: e, turns, done: (taken) => afterSelf(e, taken) }));
       } else if (near.door) {
         tip(turns ? `E  그만두고 가게로 돌아간다 · ${wound}` : "E  가게로 돌아간다");
         if (ePressed) back();
@@ -1654,12 +1643,12 @@ function selfChairScene(o) {
         st.timer -= dt;
         if (st.timer <= 0) {
           st.phase = "ready";
-          tip("Space 또는 클릭: 레버를 당긴다");
+          tip(injecting ? "E·Space  레버를 당긴다" : `E·Space  태엽을 푼다 · 다 풀릴 때까지 멈출 수 없다 · ${o.turns}바퀴`);
         }
         return;
       }
       if (st.phase === "ready") {
-        if (holding) {
+        if (holding || ePressed) {
           st.phase = "running";
           tip("");
           sfx.click();
