@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006z";
-import * as A from "./art.js?v=20261006z";
-import { ROOM } from "./art.js?v=20261006z";
-import { createSelf3D } from "./self3d.js?v=20261006z";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006z";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006z";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261007a";
+import * as A from "./art.js?v=20261007a";
+import { ROOM } from "./art.js?v=20261007a";
+import { createSelf3D } from "./self3d.js?v=20261007a";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261007a";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261007a";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -241,6 +241,7 @@ function arrive() {
   entry = null;
   return keeper;
 }
+const WALK = 74; // my walking speed, px a second; the customer following keeps up
 const keyDir = () => (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0);
 const camFor = (x, lo, hi) => Math.max(lo, Math.min(hi - W, x - W / 2));
 
@@ -299,7 +300,7 @@ const front = {
     const busy = !pnl.classList.contains("hidden");
     const dir = busy ? 0 : keyDir();
     if (dir) {
-      me.x += dir * 62 * dt;
+      me.x += dir * WALK * dt;
       me.facing = dir;
       me.walk += dt * 11;
     } else me.walk = 0;
@@ -384,7 +385,7 @@ const backRoom = {
     const me = this.me;
     const dir = keyDir();
     if (dir) {
-      me.x = Math.min(A.RW - 12, me.x + dir * 62 * dt);
+      me.x = Math.min(A.RW - 12, me.x + dir * WALK * dt);
       me.facing = dir;
       me.walk += dt * 11;
     } else me.walk = 0;
@@ -943,7 +944,7 @@ function chairScene(o) {
     const dir = free ? (keysDown.has("KeyD") || keysDown.has("ArrowRight") ? 1 : 0) - (keysDown.has("KeyA") || keysDown.has("ArrowLeft") ? 1 : 0) : 0;
     if (dir) {
       // with someone inside I stay in here; before that I can still go back to the counter
-      me.x = Math.min(A.RW - 12, Math.max(st.phase === "door" ? A.RL : A.RL + 14, me.x + dir * 62 * dt));
+      me.x = Math.min(A.RW - 12, Math.max(st.phase === "door" ? A.RL : A.RL + 14, me.x + dir * WALK * dt));
       me.facing = dir;
       me.walk += dt * 11;
     } else me.walk = 0;
@@ -952,7 +953,7 @@ function chairScene(o) {
     // the customer
     if (guest.state === "follow") {
       const behind = me.x - me.facing * 22;
-      if (Math.abs(guest.x - behind) > 3) moveToward(guest, behind, 66, dt);
+      if (Math.abs(guest.x - behind) > 3) moveToward(guest, behind, WALK + 4, dt);
       else {
         guest.walk = 0;
         guest.facing = Math.sign(me.x - guest.x) || guest.facing;
@@ -1779,7 +1780,7 @@ function selfRoomScene(e, back) {
       if (!seated) {
         const dir = keyDir();
         if (dir) {
-          me.x = Math.min(A.RW - 12, me.x + dir * 62 * dt);
+          me.x = Math.min(A.RW - 12, me.x + dir * WALK * dt);
           me.facing = dir;
           me.walk += dt * 11;
         } else me.walk = 0;
