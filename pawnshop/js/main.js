@@ -36,7 +36,6 @@ const S = {
   violations: 0,
   extractions: 0,
   flags: {},
-  talks: {}, // what has been said with each customer, kept across days
   queue: [],
   log: [],
 };
@@ -191,169 +190,47 @@ function nextVisit() {
 const jarOf = (who) => S.jars.find((j) => j.owner === who);
 const remaining = (who, emo) => (S.reserve[who] && S.reserve[who][emo]) || 0;
 
-// --- talking through the grille: the backend plays the customer (it holds their story, secrets and
-// lies) and offers three things I could say next. They sit in the visit's menu next to the deal itself.
-const TALK_API = "https://interrogation-room-rqxc.onrender.com/pawnshop/api/talk";
-const TALK_FALLBACK = ["……(대답 대신 창살 너머로 눈길을 돌린다)", "……그건 말하고 싶지 않소.", "(입을 다물고 바닥만 본다)"];
-
-// today's terms, so the customer quotes them instead of inventing numbers
-function dealOf(v) {
-  if (v.kind === "pawn" || v.kind === "last") {
-    const amount = v.kind === "last" ? remaining(v.who, v.offer.emotion) : v.offer.amount;
-    return { kind: "pawn", emotion: v.offer.emotion, amount, money: v.offer.loan };
-  }
-  if (v.kind === "buy") return { kind: "buy", emotion: v.wants, money: v.price };
-  if (v.kind === "sell") return { kind: "sell", emotion: v.offer.emotion, amount: v.offer.amount, money: v.offer.price };
-  if (v.kind === "redeem") {
-    const j = jarOf(v.who);
-    return j ? { kind: "redeem", emotion: j.emotion, money: Math.round(j.pawn.loan * (1 + j.pawn.rate / 100)) } : null;
-  }
-  if (v.kind === "blackmail") return { kind: "blackmail" };
-  return null;
-}
-
-async function talkRequest(v, message) {
-  const hist = S.talks[v.who] || [];
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 60000); // the free server can take most of a minute to wake
-  try {
-    const res = await fetch(TALK_API, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: v.who,
-        message,
-        day: S.day,
-        history: hist.filter((t) => !t.offline).slice(-14),
-        pawned: S.jars.filter((j) => j.owner === v.who).map((j) => ({ emotion: j.emotion, amount: j.amount })),
-        deal: dealOf(v),
-      }),
-      signal: ctl.signal,
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-    return data;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// when the server does not answer, the visit's fixed questions stand in, answered from the script
-function fallbackLines(v) {
+// --- questions at the grille: each visit has a few written questions, each asked once ---
+function questionsLeft(v) {
   v.asked = v.asked || new Set();
-  return (v.ask || []).filter(([q]) => !v.asked.has(q)).map(([q, a]) => ({ text: q, answer: a }));
+  return (v.ask || []).filter(([q]) => !v.asked.has(q));
 }
 
-let menuSeq = 0;
-
-// the visit's menu: three things to say (from the server) and the deal's own actions
+// the visit's menu: the questions left to ask, then the deal's own actions
 function talkMenu(v, prompt, actions) {
   const p = PEOPLE[v.who];
-  const hist = (S.talks[v.who] = S.talks[v.who] || []);
-  // what they said on coming to the grille is where the conversation starts
-  if (!v.seeded) {
-    v.seeded = true;
-    for (const line of v.intro || []) hist.push({ who: "them", text: line });
+  dlg.classList.remove("hidden");
+  dName.textContent = p.name;
+  talk = null;
+  dText.classList.remove("more");
+  const conv = v.last ? `<div class="me">나: ${esc(v.last.mine)}</div><div>${esc(v.last.reply)}</div>` : "";
+  dText.innerHTML = `${conv}<div class="deal">${esc(prompt)}</div>`;
+  dChoices.innerHTML = "";
+  for (const [q, a] of questionsLeft(v)) {
+    const btn = document.createElement("button");
+    btn.className = "say-line";
+    btn.textContent = `“${q}”`;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      sfx.click();
+      v.asked.add(q);
+      v.last = { mine: q, reply: a };
+      talkMenu(v, prompt, actions);
+    });
+    dChoices.appendChild(btn);
   }
-  const id = ++menuSeq;
-  v.menu = id;
-  const live = () => v.menu === id;
-  // replies that arrive later redraw whichever menu of this visit is open by then
-  v.render = render;
-  const redraw = () => v.menu && v.render && v.render();
-
-  function render() {
-    if (!live()) return;
-    dlg.classList.remove("hidden");
-    dName.textContent = p.name;
-    talk = null;
-    dText.classList.remove("more");
-    const conv = v.last
-      ? `<div class="me">나: ${esc(v.last.mine)}</div><div>${v.last.reply === null ? '<span class="waiting">……</span>' : esc(v.last.reply)}</div>`
-      : "";
-    dText.innerHTML = `${conv}<div class="deal">${esc(prompt)}</div>`;
-    dChoices.innerHTML = "";
-    if (v.busy || !v.lines) {
-      const wait = document.createElement("button");
-      wait.className = "say-line";
-      wait.textContent = "……";
-      wait.disabled = true;
-      dChoices.appendChild(wait);
-    } else {
-      for (const line of v.lines) {
-        const btn = document.createElement("button");
-        btn.className = "say-line";
-        btn.textContent = `“${line.text}”`;
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          sfx.click();
-          speak(line);
-        });
-        dChoices.appendChild(btn);
-      }
-    }
-    for (const a of actions) {
-      const btn = document.createElement("button");
-      btn.textContent = a.label + (a.note ? `  (${a.note})` : "");
-      btn.disabled = !!a.disabled;
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        sfx.click();
-        v.menu = 0; // leaving this menu: late replies must not redraw it
-        dChoices.innerHTML = "";
-        a.fn();
-      });
-      dChoices.appendChild(btn);
-    }
+  for (const a of actions) {
+    const btn = document.createElement("button");
+    btn.textContent = a.label + (a.note ? `  (${a.note})` : "");
+    btn.disabled = !!a.disabled;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      sfx.click();
+      dChoices.innerHTML = "";
+      a.fn();
+    });
+    dChoices.appendChild(btn);
   }
-
-  function speak(line) {
-    if (line.answer !== undefined) {
-      v.asked.add(line.text);
-      v.last = { mine: line.text, reply: line.answer };
-      hist.push({ who: "keeper", text: line.text, offline: true }, { who: "them", text: line.answer, offline: true });
-      v.lines = fallbackLines(v);
-      redraw();
-      return;
-    }
-    v.last = { mine: line.text, reply: null };
-    v.busy = true;
-    redraw();
-    talkRequest(v, line.text)
-      .then((data) => {
-        v.last.reply = data.reply || TALK_FALLBACK[0];
-        hist.push({ who: "keeper", text: line.text }, { who: "them", text: v.last.reply });
-        v.lines = data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines(v);
-      })
-      .catch((e) => {
-        console.warn("customer talk failed", e);
-        v.last.reply = TALK_FALLBACK[Math.floor(Math.random() * TALK_FALLBACK.length)];
-        hist.push({ who: "keeper", text: line.text, offline: true }, { who: "them", text: v.last.reply, offline: true });
-        v.lines = fallbackLines(v);
-      })
-      .finally(() => {
-        v.busy = false;
-        redraw();
-      });
-  }
-
-  // the first lines are fetched once per visit and kept while the menu comes and goes
-  if (!v.lines && !v.busy) {
-    v.busy = true;
-    talkRequest(v, "")
-      .then((data) => {
-        v.lines = data.options && data.options.length ? data.options.map((t) => ({ text: t })) : fallbackLines(v);
-      })
-      .catch((e) => {
-        console.warn("customer talk failed", e);
-        v.lines = fallbackLines(v);
-      })
-      .finally(() => {
-        v.busy = false;
-        redraw();
-      });
-  }
-  render();
 }
 
 function pawnFlow(v) {
