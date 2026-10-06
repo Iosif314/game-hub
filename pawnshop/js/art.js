@@ -1,7 +1,7 @@
 // Everything drawn: the counter, the people at the grille, the back room with the chair, the jars.
 // Scene shapes go in grey on the base layer; colour (gas, blood) goes on the colour layer.
-import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006k";
-import { EMOTIONS } from "./data.js?v=20261006k";
+import { W, H, rect, crect, ellipse, line, rng } from "./screen.js?v=20261006l";
+import { EMOTIONS } from "./data.js?v=20261006l";
 
 // --- the counter: the grille, the counter top, the ledger, the scale, the three balls ---
 export function drawCounter(b, t) {

@@ -310,7 +310,7 @@ export function createSelf3D(canvas) {
         e.material.color.copy(col);
         e.material.opacity = s.flood ? s.flood * (0.7 + Math.sin(t * 5) * 0.15) : 0;
       }
-      if (s.flood && Math.random() < dt * 30) {
+      if (s.flood && s.tears !== false && Math.random() < dt * 30) {
         const m = new THREE.Mesh(new THREE.PlaneGeometry(0.008, 0.05 + Math.random() * 0.12), new THREE.MeshBasicMaterial({ color: col, depthTest: false }));
         m.position.set((Math.random() - 0.5) * screenW * 0.9, CAM.y + screenH * 0.55, SCREEN_Z + 0.3);
         m.userData.v = 0.4 + Math.random() * 0.6;

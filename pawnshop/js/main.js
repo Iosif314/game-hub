@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006k";
-import * as A from "./art.js?v=20261006k";
-import { ROOM } from "./art.js?v=20261006k";
-import { createSelf3D } from "./self3d.js?v=20261006k";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006k";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006k";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006l";
+import * as A from "./art.js?v=20261006l";
+import { ROOM } from "./art.js?v=20261006l";
+import { createSelf3D } from "./self3d.js?v=20261006l";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006l";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006l";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -1134,6 +1134,7 @@ function cellarScene({ title, pick, back }) {
     labelTip.classList.add("hidden");
     const buttons = [{ label: "확대경으로 들여다본다", fn: () => magnify(jar) }];
     if (pick) buttons.push({ label: "이 병을 고른다", fn: () => pick(jar) });
+    else if (jar.self && back) buttons.push({ label: "내게 다시 넣는다", fn: () => reinjectSelf(jar, back) });
     buttons.push({
       label: "선반에 둔다",
       fn: () => {
@@ -1309,7 +1310,20 @@ const evening = {
         },
       });
     } else buttons.push({ label: "가게 문을 닫는다", fn: () => (closePanel(), go(night())) });
-    buttons.unshift({ label: "태엽 장치로 내 감정을 판다", fn: () => selfPawn(() => go(evening)) });
+    buttons.unshift({ label: "태엽 장치로 내 감정을 뽑는다", fn: () => selfPawn(() => go(evening)) });
+    for (const j of S.jars.filter((x) => x.self)) {
+      const pay = Math.round(j.amount * SELF_PRICE);
+      buttons.unshift({
+        label: `내 ${EMOTIONS[j.emotion].name} ${j.amount}할을 조합에 넘긴다 (${pay}실링)`,
+        fn: () => {
+          removeJar(j);
+          S.cash += pay;
+          sfx.coins(5);
+          note(`내 ${EMOTIONS[j.emotion].name} ${j.amount}할을 조합에 넘기고 ${pay}실링을 받았다`);
+          go(evening);
+        },
+      });
+    }
     panel(
       `<div class="ledger">
          <div class="head">장부 · ${DATES[S.day - 1]}</div>
@@ -1425,7 +1439,7 @@ function summary() {
   if (f.reported) lines.push("넬리의 아버지가 조합에 고발장을 냈다.");
   if (f.fined) lines.push("감독관에게 벌금을 냈다.");
   const sold = Object.entries(S.selfTaken).filter(([, v]) => v > 0);
-  if (sold.length) lines.push(`나는 ${sold.map(([k, v]) => `${SELF[k].name} ${v}할`).join(", ")}을 팔았다.`);
+  if (sold.length) lines.push(`나는 내 ${sold.map(([k, v]) => `${SELF[k].name} ${v}할`).join(", ")}을 잃은 채다.`);
   lines.push(`사흘 동안 들은 비명 ${S.screams}번. 지워지지 않은 자국 ${S.violations}번.`);
   lines.push(f.grief ? "스승이 어떻게 죽었는지 기억해 냈다." : "서랍 속 전당표의 기한까지 사흘이 남았다.");
   go({
@@ -1533,7 +1547,7 @@ function selfRoomScene(e, back) {
         spin -= dt;
         windAngle += dt * 9;
       }
-      const wound = turns ? `${turns}바퀴 (${SELF[e].name} ${turns}할 · ${turns * SELF_PRICE}실링)` : "";
+      const wound = turns ? `${turns}바퀴 (${SELF[e].name} ${turns}할)` : "";
       if (near.clock) {
         tip(turns >= 10 ? `더는 감기지 않는다 · ${wound}` : `E  태엽을 한 바퀴 감는다${wound ? " · " + wound : ""}`);
         if (ePressed && turns < 10) {
@@ -1577,16 +1591,45 @@ function selfRoomScene(e, back) {
 }
 
 function afterSelf(e, taken) {
-  S.selfTaken[e] = round1(S.selfTaken[e] + taken);
-  const pay = Math.round(taken * SELF_PRICE);
-  S.cash += pay;
-  sfx.coins(5);
-  note(`내 ${SELF[e].name} ${round1(taken)}할을 조합에 넘기고 ${pay}실링을 받았다`);
+  const amount = round1(taken);
+  S.selfTaken[e] = round1(S.selfTaken[e] + amount);
+  if (amount > 0) {
+    S.jars.push({
+      id: ++uid,
+      emotion: e,
+      amount,
+      owned: true,
+      self: true,
+      owner: "me",
+      moment: "의자의 가죽 끈, 혼자 돌아가는 태엽. 비명을 지르는 목소리가 내 것이다.",
+      label: { no: String(S.ticket++).padStart(4, "0"), name: "(내 이름)", emotion: SELF[e].name, object: "", amount: `${Math.max(1, Math.round(amount))}할`, date: dateOf(S.day), due: "", loan: "", rate: "", memo: "태엽 장치로 직접 뽑음", hand: "mine" },
+    });
+    sfx.glass();
+  }
+  note(`내 ${SELF[e].name} ${amount}할을 뽑아 저장고에 두었다`);
   go(evening);
 }
 
+// my own jar back into me: the lack it left goes too
+function reinjectSelf(jar, back) {
+  closePanel();
+  go(
+    selfChairScene({
+      mode: "inject",
+      emotion: jar.emotion,
+      turns: jar.amount,
+      done: () => {
+        S.selfTaken[jar.emotion] = Math.max(0, round1(S.selfTaken[jar.emotion] - jar.amount));
+        removeJar(jar);
+        note(`내 ${EMOTIONS[jar.emotion].name} ${jar.amount}할을 다시 내게 넣었다`);
+        back();
+      },
+    }),
+  );
+}
+
 // strapped in, seen from my own eyes. mode "extract": the clockwork runs down and nobody can stop it;
-// mode "inject": my own grief coming back
+// mode "inject": something of mine coming back
 function selfChairScene(o) {
   const injecting = o.mode === "inject";
   const reserve = injecting ? Infinity : SELF[o.emotion].reserve - S.selfTaken[o.emotion];
@@ -1684,9 +1727,14 @@ function selfChairScene(o) {
       if (injecting) {
         st.level = Math.max(0, st.level - dt * 0.9);
         if (Math.random() < dt * 40) st.gas.push({ s: SELF_TUBE.total, v: -110 });
-        if (Math.random() < dt * 30) st.tears.push({ x: 40 + Math.random() * (W - 80), y: -4, vy: 40 + Math.random() * 60, len: 4 + Math.random() * 10 });
-        const sob = Math.sin(t * Math.PI * 2 * 1.6) > -0.2 ? 1 : 0.25;
-        voice.node.set({ f0: 210 + Math.sin(t * 1.3) * 40, loud: st.intensity * sob, vowel: 0.25, rough: 0.4, wobble: 9 });
+        // fear comes back as shaking and a thin high whine; the rest come back as weeping
+        if (o.emotion === "fear") {
+          voice.node.set({ f0: 320 + Math.sin(t * 23) * 30 + (Math.random() - 0.5) * 30, loud: st.intensity * 0.8, vowel: 0.6, rough: 0.7, wobble: 18 });
+        } else {
+          if (Math.random() < dt * 30) st.tears.push({ x: 40 + Math.random() * (W - 80), y: -4, vy: 40 + Math.random() * 60, len: 4 + Math.random() * 10 });
+          const sob = Math.sin(t * Math.PI * 2 * 1.6) > -0.2 ? 1 : 0.25;
+          voice.node.set({ f0: 210 + Math.sin(t * 1.3) * 40, loud: st.intensity * sob, vowel: 0.25, rough: 0.4, wobble: 9 });
+        }
       } else {
         if (st.taken < reserve) st.taken = Math.min(reserve, st.taken + dt * 0.9);
         st.level = st.taken;
@@ -1717,13 +1765,14 @@ function selfChairScene(o) {
       S3.update(dt, t, {
         angle: st.angle,
         hands: running ? st.intensity : 0,
-        shake: running ? st.intensity * (injecting ? 0.4 : 1) : 0,
+        shake: running ? st.intensity * (injecting && o.emotion !== "fear" ? 0.4 : 1) : 0,
         level: st.level,
         emotionColor: emo.color,
         gas: st.gas.map((g) => ({ u: Math.max(0, Math.min(1, g.s / SELF_TUBE.total)) })),
         bleeding: running && !injecting,
         blood: st.blood,
         flood: injecting && running ? st.intensity : 0,
+        tears: o.emotion !== "fear",
         running,
       });
       S3.render();
