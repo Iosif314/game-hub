@@ -1,9 +1,9 @@
-import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006u";
-import * as A from "./art.js?v=20261006u";
-import { ROOM } from "./art.js?v=20261006u";
-import { createSelf3D } from "./self3d.js?v=20261006u";
-import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006u";
-import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006u";
+import { createScreen, W, H, rect, crect, rng } from "./screen.js?v=20261006v";
+import * as A from "./art.js?v=20261006v";
+import { ROOM } from "./art.js?v=20261006v";
+import { createSelf3D } from "./self3d.js?v=20261006v";
+import { startAudio, createGenerator, createVoice, sfx } from "./audio.js?v=20261006v";
+import { EMOTIONS, DATES, DUE_DAYS, GUILD_DUE, START_JARS, PEOPLE, RESERVES, DAYS, PAPERS, SELF, SELF_PRICE, SELF_EFFECT, MASTER_NOTE, MASTER_MEMORY } from "./data.js?v=20261006v";
 
 const $ = (id) => document.getElementById(id);
 const view = $("view");
@@ -814,8 +814,10 @@ function drawPerm(c) {
 
 // mode "extract": hold to crank, the emotion leaves through the tube and the blood stays where it lands
 // until the cranking stops. mode "inject": hold to push a jar back in; no blood, the emotion swells.
-// how many 할 a second the chair moves, either way; slow enough that it is felt
+// how many 할 a second the chair moves: taking out is slow enough to be felt; putting back in is quick
 const EXTRACT_RATE = 0.47;
+const INJECT_RATE = 1.1; // a customer's jar, pushed back by the generator
+const SELF_INJECT_RATE = 0.9; // my own jar, the clockwork running down
 
 function chairScene(o) {
   const look = PEOPLE[o.who].look;
@@ -1026,7 +1028,7 @@ function chairScene(o) {
       st.intensity += ((on ? 1 : 0) - st.intensity) * Math.min(1, dt * (on ? 2.5 : 6));
 
       if (injecting) {
-        if (on) st.level = Math.max(0, st.level - dt * EXTRACT_RATE * 1.15);
+        if (on) st.level = Math.max(0, st.level - dt * INJECT_RATE);
         if (on && Math.random() < dt * 40) st.gas.push({ s: TUBE.total, v: -110 });
         injectVoice(t);
         if (o.emotion === "grief" && on) {
@@ -1915,7 +1917,7 @@ function selfChairScene(o) {
       if (st.phase !== "running") return;
 
       // the spring runs down at its own pace; holding or letting go changes nothing now
-      st.wind = Math.max(0, st.wind - dt * EXTRACT_RATE);
+      st.wind = Math.max(0, st.wind - dt * (injecting ? SELF_INJECT_RATE : EXTRACT_RATE));
       st.angle += dt * 6;
       st.tick += dt * 6;
       if (st.tick > Math.PI / 2) {
@@ -1925,7 +1927,7 @@ function selfChairScene(o) {
       generator.node.set(1);
       st.intensity = Math.min(1, st.intensity + dt * 2);
       if (injecting) {
-        st.level = Math.max(0, st.level - dt * EXTRACT_RATE);
+        st.level = Math.max(0, st.level - dt * SELF_INJECT_RATE);
         if (Math.random() < dt * 40) st.gas.push({ s: SELF_TUBE.total, v: -110 });
         // fear comes back as shaking and a thin high whine; the rest come back as weeping
         if (o.emotion === "fear") {

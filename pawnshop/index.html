@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>감정 전당포 · 시험판</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.39.3/dist/galmuri.css" />
-  <link rel="stylesheet" href="css/style.css?v=20261006u" />
+  <link rel="stylesheet" href="css/style.css?v=20261006v" />
   <script type="importmap">
     { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
   </script>
@@ -43,7 +43,7 @@
     // fetch it again. Ask the server directly which build is current, and if it is newer than this
     // one, load that build instead (once per build, so it can never loop).
     (function () {
-      var build = "20261006u";
+      var build = "20261006v";
       fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })
         .then(function (r) { return r.text(); })
         .then(function (html) {
@@ -58,6 +58,6 @@
         .catch(function () {});
     })();
   </script>
-  <script type="module" src="js/main.js?v=20261006u"></script>
+  <script type="module" src="js/main.js?v=20261006v"></script>
 </body>
 </html>
