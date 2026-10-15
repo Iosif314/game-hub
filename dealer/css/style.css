@@ -1,0 +1,141 @@
+:root {
+  --ink: #0e0b0a;
+  --paper: #e8e0cc;
+  --dim: #9a8f7c;
+  --gold: #e8c25a;
+  --felt: #1f5b3b;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #070605;
+  color: var(--paper);
+  font-family: "Galmuri11", monospace;
+  overflow: hidden;
+}
+body { display: flex; align-items: center; justify-content: center; }
+#stage {
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  aspect-ratio: 16 / 9;
+  user-select: none;
+}
+#view { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.hidden { display: none !important; }
+
+#hud {
+  position: absolute;
+  top: 1.5%;
+  right: 6%;
+  font-size: clamp(10px, 1.3vw, 15px);
+  text-align: right;
+  white-space: pre;
+  text-shadow: 0 0 3px #000, 0 0 3px #000;
+}
+#tip {
+  position: absolute;
+  left: 1.5%;
+  bottom: 13%;
+  max-width: 60%;
+  font-size: clamp(10px, 1.25vw, 14px);
+  background: rgba(10, 8, 7, 0.8);
+  padding: 3px 10px;
+}
+#tip:empty { display: none; }
+#mgr {
+  position: absolute;
+  top: 1.5%;
+  left: 1.5%;
+  font-size: clamp(10px, 1.2vw, 13px);
+  text-shadow: 0 0 3px #000;
+}
+#mgr .bar { width: clamp(80px, 14vw, 180px); height: 8px; background: #2a2220; margin-top: 3px; }
+#mgr-fill { height: 100%; width: 0; background: #d88a3a; transition: width 0.2s; }
+
+.bubble {
+  position: absolute;
+  max-width: 24%;
+  font-size: clamp(10px, 1.2vw, 14px);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 3px 8px;
+  border-radius: 2px;
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+.bubble.dealer { left: 50%; top: 55%; transform: translateX(-50%); background: var(--gold); }
+
+#tricks {
+  position: absolute;
+  right: 1.5%;
+  bottom: 2%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 60%;
+}
+button {
+  font: inherit;
+  font-size: clamp(10px, 1.15vw, 13px);
+  color: var(--paper);
+  background: #1c1714;
+  border: 1px solid var(--dim);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+button:disabled { opacity: 0.35; cursor: default; }
+kbd { font: inherit; opacity: 0.6; font-size: 0.85em; }
+
+#panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(70%, 640px);
+  max-height: 86%;
+  overflow: auto;
+  background: rgba(14, 11, 10, 0.96);
+  border: 2px solid var(--dim);
+  padding: 18px 22px;
+  font-size: clamp(12px, 1.5vw, 17px);
+  line-height: 1.6;
+}
+#panel.small-panel { width: min(40%, 320px); top: 40%; }
+#panel.wide { width: min(86%, 820px); }
+#panel .who { color: var(--gold); margin-bottom: 6px; }
+#panel .small { color: var(--dim); font-size: 0.85em; margin-top: 6px; }
+#panel .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+#panel .item { border-top: 1px solid #3a302a; padding: 8px 0; }
+#panel .item.have { opacity: 0.55; }
+#panel .item .name { color: var(--paper); }
+#panel .item .kind { color: var(--dim); font-size: 0.8em; margin-left: 6px; }
+#panel .item .desc { color: var(--dim); font-size: 0.85em; }
+#panel .item .price { color: var(--gold); font-size: 0.85em; }
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(7, 6, 5, 0.94);
+  cursor: pointer;
+  text-align: center;
+  padding: 0 8%;
+}
+#overlay h1 { margin: 0; font-size: clamp(28px, 5vw, 56px); color: var(--gold); letter-spacing: 0.2em; }
+#overlay .sub { color: var(--dim); }
+#overlay .lead { font-size: clamp(11px, 1.4vw, 16px); line-height: 1.7; }
+#overlay .keys { font-size: clamp(10px, 1.2vw, 14px); border-collapse: collapse; margin-top: 6px; }
+#overlay .keys td { padding: 2px 10px; text-align: left; }
+#overlay .keys td:first-child { color: var(--gold); text-align: right; }
+#overlay .hint { color: var(--dim); font-size: clamp(10px, 1.15vw, 13px); }
+#overlay .start { margin-top: 8px; animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0.3; } }
+
+#version { position: absolute; right: 0.8%; top: 0.4%; font-size: 9px; color: #5a5048; }

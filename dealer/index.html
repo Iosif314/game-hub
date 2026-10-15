@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>딜러 · 시험판</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@2.39.3/dist/galmuri.css" />
+  <link rel="stylesheet" href="css/style.css?v=20261015f" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="hud"></div>
+    <div id="tip"></div>
+    <div id="mgr"><span>매니저 의심</span><div class="bar"><div id="mgr-fill"></div></div></div>
+    <div id="b0" class="bubble hidden"></div>
+    <div id="b1" class="bubble hidden"></div>
+    <div id="b2" class="bubble hidden"></div>
+    <div id="bd" class="bubble dealer hidden"></div>
+    <div id="tricks">
+      <button id="deal">나누기 <kbd>Space</kbd></button>
+      <button id="t1">엿보기 <kbd>1</kbd></button>
+      <button id="t2">두 번째 카드 <kbd>2</kbd></button>
+      <button id="t3">가짜 섞기 <kbd>3</kbd></button>
+      <button id="t4" class="hidden">소매 속 카드 <kbd>4</kbd></button>
+    </div>
+    <div id="panel" class="hidden"></div>
+    <div id="version"></div>
+    <div id="overlay">
+      <h1>딜러</h1>
+      <div class="sub">시험판 · 사흘 밤</div>
+      <div class="lead">뒷골목 카지노의 블랙잭 딜러가 되어, 손기술로 판을 기울여 사장이 정한 몫을 채우세요.<br />너무 티 나게 하면 손님과 매니저와 천장 카메라가 알아챕니다.</div>
+      <table class="keys">
+        <tr><td>카드 나누기 · 섞기</td><td>Space 또는 덱 클릭</td></tr>
+        <tr><td>엿보기</td><td>1을 꾹 누르고, 막대가 초록 칸에 올 때 떼기</td></tr>
+        <tr><td>두 번째 카드 나누기</td><td>2를 누르고, 바늘이 초록 틈에 올 때 2 또는 Space</td></tr>
+        <tr><td>가짜 섞기</td><td>섞을 때 3, 그다음 박자에 맞춰 Space 네 번</td></tr>
+        <tr><td>손님에게</td><td>클릭해서 매니저에게 알리거나 큰손을 추켜세우기</td></tr>
+      </table>
+      <div class="hint">손님 머리 위의 눈이 빨가면 내 손을 보고 있어요. 천장 구석의 빨간 불은 카메라예요.</div>
+      <div class="start">클릭해서 시작</div>
+    </div>
+  </div>
+  <script>
+    // GitHub Pages lets browsers keep this page for a while; load the newest build once if there is one
+    (function () {
+      var build = "20261015f";
+      fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          var m = html.match(/main\.js\?v=([0-9a-z]+)/);
+          if (!m || m[1] === build) return;
+          try {
+            if (sessionStorage.getItem("loaded-" + m[1])) return;
+            sessionStorage.setItem("loaded-" + m[1], "1");
+          } catch (e) {}
+          location.replace(location.pathname + "?v=" + m[1]);
+        })
+        .catch(function () {});
+    })();
+  </script>
+  <script type="module" src="js/main.js?v=20261015f"></script>
+</body>
+</html>
